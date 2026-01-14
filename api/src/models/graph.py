@@ -11,17 +11,27 @@ from sqlalchemy.orm import Mapped, aliased, column_property, mapped_column
 from src.models.base import Base, intpk
 
 
+class MapModel(Base):
+    """Map model."""
+
+    __tablename__ = "maps"
+
+    id: Mapped[intpk] = mapped_column(init=False)
+    name: Mapped[str]
+
+
 class LayerModel(Base):
     """Defines a layer in the hierarchy (e.g., Territory, Region, Zip)."""
 
     __tablename__ = "layers"
 
     id: Mapped[intpk] = mapped_column(init=False)
+    map_id: Mapped[int] = mapped_column(ForeignKey("maps.id"))
     name: Mapped[str] = mapped_column(unique=True)
     order: Mapped[int]
     """Order of the layer (aka 0 will always be zip, 1 will usually be territory, etc.)"""
 
-    __table_args__ = (UniqueConstraint("order"),)
+    __table_args__ = (UniqueConstraint("order", "map_id"),)
 
 
 class NodeModel(Base):

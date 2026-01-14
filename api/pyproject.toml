@@ -107,7 +107,9 @@ ignore = [
     # DoNotAssignLambda
     "E731",
     # unused-async
-    "RUF029"
+    "RUF029",
+    # Avoid specifying long messages outside the exception class
+    "TRY003"
 ]
 
 [tool.ruff.lint.per-file-ignores]

@@ -1,6 +1,5 @@
 """Maps router."""
 
-import random
 from typing import Any, TypedDict
 
 import pandas as pd
@@ -10,10 +9,14 @@ from sqlalchemy.dialects.postgresql import insert
 
 from src.app.database import DatabaseSession
 from src.models.geography import ZipCodeGeography
-from src.models.graph import LayerModel, NodeModel
+from src.models.graph import LayerModel, MapModel, NodeModel
 from src.schemas.dtos.graph import CreateLayer
-from src.schemas.dtos.maps import ImportMap, ImportMapResponse
-from src.services import ComputationServiceDependency, GraphServiceDependency
+from src.schemas.dtos.maps import ImportMap
+from src.schemas.graph import Map
+from src.services.auth import CurrentUserDependency
+from src.services.computation import ComputationServiceDependency
+from src.services.graph import GraphServiceDependency
+from src.services.permissions import PermissionsServiceDependency
 
 maps_router = APIRouter(prefix="/maps", tags=["Maps"])
 
@@ -32,12 +35,14 @@ class BulkInsertNode(TypedDict):
     geom_inputs_cache_key: str
 
 
-@maps_router.post("", response_model=ImportMapResponse)
+@maps_router.post("", response_model=Map)
 def create_map(
     graph_service: GraphServiceDependency,
     db: DatabaseSession,
     import_data: ImportMap,
     computation_service: ComputationServiceDependency,
+    current_user: CurrentUserDependency,
+    permission_service: PermissionsServiceDependency,
 ):
     """Create map.
 
@@ -49,10 +54,23 @@ def create_map(
         - Recompute after loading zip codes
         - Add data fields
     """
+    # Create map
+    new_map = graph_service.create_map(name=import_data.name)
+    permission_service.add_map_role(
+        user_id=current_user.id,
+        map_id=new_map.id,
+        role="OWNER",
+    )
+
     # Create layers
     layer_and_headers: list[tuple[LayerModel, str]] = []
     for layer_setup in import_data.layers:
-        layer = graph_service.create_layer(layer_data=CreateLayer(name=layer_setup.name))
+        layer = graph_service.create_layer(
+            layer_data=CreateLayer(
+                name=layer_setup.name,
+                map_id=new_map.id,
+            )
+        )
         layer_and_headers.append((layer, layer_setup.header))
 
     # Convert values to numpy array for efficient column access
@@ -121,12 +139,20 @@ def create_map(
 
     db.commit()
 
-    return ImportMapResponse(map_id=random.randint(1, 1000))
+    return Map(id=new_map.id, name=new_map.name)
 
 
-# @maps_router.get("")
-# def list_maps(
-#     # db: DatabaseSession,
-# ):
-#     """List maps."""
-#     pass
+@maps_router.post("", response_model=list[Map])
+def list_maps(
+    db: DatabaseSession,
+    current_user: CurrentUserDependency,
+    permission_service: PermissionsServiceDependency,
+):
+    """List maps."""
+    map_roles = permission_service.list_map_roles(user_id=current_user.id)
+    return [
+        Map(id=_map.id, name=_map.name)
+        for _map in db.execute(select(MapModel).where(MapModel.id.in_([map_role.map_id for map_role in map_roles])))
+        .scalars()
+        .all()
+    ]

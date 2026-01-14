@@ -2,11 +2,14 @@
 
 import logging
 from collections.abc import Sequence
+from typing import Annotated
 
+from fastapi import Depends
 from geoalchemy2.elements import WKBElement
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from src.app.database import DatabaseSession
 from src.models.graph import NodeModel
 from src.services.base import BaseService
 
@@ -189,3 +192,11 @@ class ComputationService(BaseService):
     def _get_children(db: Session, parent_id: int) -> Sequence[NodeModel]:
         rows = db.execute(select(NodeModel).where(NodeModel.parent_node_id == parent_id)).scalars().all()
         return rows
+
+
+def get_computation_service(db: DatabaseSession) -> ComputationService:
+    """Get computation service."""
+    return ComputationService(db=db)
+
+
+ComputationServiceDependency = Annotated[ComputationService, Depends(get_computation_service)]

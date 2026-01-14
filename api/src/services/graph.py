@@ -1,12 +1,14 @@
 """Graph service."""
 
-from typing import Literal, cast
+from typing import Annotated, Literal, cast
 
+from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.exc import NoResultFound
 
+from src.app.database import DatabaseSession
 from src.exceptions import TerriscopeException
-from src.models.graph import LayerModel, NodeModel
+from src.models.graph import LayerModel, MapModel, NodeModel
 from src.schemas.dtos.graph import CreateLayer, CreateNode, UpdateNode
 from src.services.base import BaseService
 
@@ -14,12 +16,23 @@ from src.services.base import BaseService
 class GraphService(BaseService):
     """GraphService."""
 
+    def create_map(self, name: str) -> MapModel:
+        """Create map."""
+        new_map = MapModel(name=name)
+        self.db.add(new_map)
+        self.db.flush()
+        return new_map
+
     def create_layer(self, layer_data: CreateLayer) -> LayerModel:
         """Create layer."""
         child_layer = self.db.execute(select(LayerModel).order_by(LayerModel.order.desc())).scalars().first()
 
         # Create new layer one level above
-        new_layer = LayerModel(name=layer_data.name, order=child_layer.order + 1 if child_layer else 0)
+        new_layer = LayerModel(
+            name=layer_data.name,
+            order=child_layer.order + 1 if child_layer else 0,
+            map_id=layer_data.map_id,
+        )
         self.db.add(new_layer)
         self.db.flush()
         return new_layer
@@ -114,3 +127,11 @@ class GraphService(BaseService):
                 f"Can't create node with parent: {proposed_parent_node_id}. Parent layer order {parent_layer.order} needs to be one level higher than current layer order {current_layer.order}.",
             )
         return True
+
+
+def get_graph_service(db: DatabaseSession) -> GraphService:
+    """Get graph service."""
+    return GraphService(db=db)
+
+
+GraphServiceDependency = Annotated[GraphService, Depends(get_graph_service)]

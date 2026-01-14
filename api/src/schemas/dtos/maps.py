@@ -1,9 +1,9 @@
 """Map DTOs."""
 
 from collections.abc import Sequence
-from typing import Any, Literal
+from typing import Literal
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 
 
 class LayerSetup(BaseModel):

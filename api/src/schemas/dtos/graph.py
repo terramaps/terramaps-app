@@ -7,6 +7,7 @@ class CreateLayer(BaseModel):
     """CreateLayer."""
 
     name: str
+    map_id: int
 
 
 class UpdateNode(BaseModel):

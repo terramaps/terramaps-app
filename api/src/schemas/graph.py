@@ -6,10 +6,18 @@ from typing import Literal
 from pydantic import BaseModel
 
 
+class Map(BaseModel):
+    """Map."""
+
+    id: int
+    name: str
+
+
 class Layer(BaseModel):
     """Layer."""
 
     id: int
+    map_id: int
     name: str
     order: int
 

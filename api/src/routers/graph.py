@@ -10,7 +10,9 @@ from src.exceptions import TerriscopeException
 from src.models.graph import LayerModel, NodeModel
 from src.schemas.dtos.graph import BulkUpdateNode, CreateLayer, CreateNode, UpdateNode
 from src.schemas.graph import Layer, Node, PaginatedNodes
-from src.services import GraphServiceDependency
+from src.services.auth import CurrentUserDependency
+from src.services.graph import GraphServiceDependency
+from src.services.permissions import PermissionsServiceDependency
 
 graph_router = APIRouter(prefix="", tags=["Graph"])
 
@@ -20,24 +22,49 @@ def create_layer(
     layer_data: CreateLayer,
     graph_service: GraphServiceDependency,
     db: DatabaseSession,
+    current_user: CurrentUserDependency,
+    permission_service: PermissionsServiceDependency,
 ):
     """Create layer."""
     # Get the highest order layer (the current top layer)
+    if not permission_service.check_for_map_access(
+        user_id=current_user.id,
+        map_id=layer_data.map_id,
+        map_roles=["OWNER"],
+    ):
+        raise HTTPException(403, "User does not have permission to this map.")
     new_layer = graph_service.create_layer(layer_data)
     db.commit()
-    return Layer(id=new_layer.id, name=new_layer.name, order=new_layer.order)
+    return Layer(
+        id=new_layer.id,
+        name=new_layer.name,
+        order=new_layer.order,
+        map_id=new_layer.map_id,
+    )
 
 
 @graph_router.get("/layers", response_model=list[Layer])
-def list_layers(db: DatabaseSession) -> list[Layer]:
+def list_layers(
+    db: DatabaseSession,
+    map_id: int,
+    current_user: CurrentUserDependency,
+    permission_service: PermissionsServiceDependency,
+) -> list[Layer]:
     """List layers."""
+    if not permission_service.check_for_map_access(
+        user_id=current_user.id,
+        map_id=map_id,
+        map_roles=["OWNER"],
+    ):
+        raise HTTPException(403, "User does not have permission to this map.")
     return [
         Layer(
             id=layer.id,
+            map_id=map_id,
             name=layer.name,
             order=layer.order,
         )
-        for layer in db.query(LayerModel).all()
+        for layer in db.query(LayerModel).filter(LayerModel.map_id == map_id).all()
     ]
 
 
@@ -45,14 +72,21 @@ def list_layers(db: DatabaseSession) -> list[Layer]:
 def get_layer(
     layer_id: int,
     db: DatabaseSession,
+    current_user: CurrentUserDependency,
+    permission_service: PermissionsServiceDependency,
 ):
     """Get a layer by id."""
     layer = db.get(LayerModel, layer_id)
-    if layer:
+    if layer and permission_service.check_for_map_access(
+        user_id=current_user.id,
+        map_id=layer.map_id,
+        map_roles=["OWNER"],
+    ):
         return Layer(
             id=layer.id,
             name=layer.name,
             order=layer.order,
+            map_id=layer.map_id,
         )
     raise HTTPException(404)
 
@@ -62,8 +96,17 @@ def create_node(
     node_data: CreateNode,
     db: DatabaseSession,
     graph_service: GraphServiceDependency,
+    current_user: CurrentUserDependency,
+    permission_service: PermissionsServiceDependency,
 ):
     """Create node."""
+    layer = db.get(LayerModel, node_data.layer_id)
+    if not layer or not permission_service.check_for_map_access(
+        user_id=current_user.id,
+        map_id=layer.map_id,
+        map_roles=["OWNER"],
+    ):
+        raise HTTPException(403)
     try:
         new_node = graph_service.create_node(node_data=node_data)
     except TerriscopeException as e:
@@ -85,6 +128,8 @@ def create_node(
 @graph_router.get("/nodes")
 def list_nodes(
     db: DatabaseSession,
+    current_user: CurrentUserDependency,
+    permission_service: PermissionsServiceDependency,
     layer_id: int | None = None,
     parent_node_id: int | None = None,
     page: int = 1,
@@ -96,7 +141,22 @@ def list_nodes(
         raise HTTPException(400, "Provide either layer_id or parent_node_id, not both")
     elif layer_id is not None:
         filter_condition = NodeModel.layer_id == layer_id
+        layer = db.get(LayerModel, layer_id)
+        if not layer or not permission_service.check_for_map_access(
+            user_id=current_user.id,
+            map_id=layer.map_id,
+            map_roles=["OWNER"],
+        ):
+            raise HTTPException(403)
     elif parent_node_id is not None:
+        parent_node = db.get(NodeModel, parent_node_id)
+        layer = db.get(LayerModel, parent_node.layer_id) if parent_node else None
+        if not layer or not permission_service.check_for_map_access(
+            user_id=current_user.id,
+            map_id=layer.map_id,
+            map_roles=["OWNER"],
+        ):
+            raise HTTPException(403)
         filter_condition = NodeModel.parent_node_id == parent_node_id
     else:
         raise HTTPException(400, "Must provide either layer_id or parent_node_id")
@@ -132,10 +192,31 @@ def list_nodes(
 
 
 @graph_router.get("/nodes/{node_id}")
-def get_node(node_id: int, db: DatabaseSession):
+def get_node(
+    node_id: int,
+    db: DatabaseSession,
+    current_user: CurrentUserDependency,
+    permission_service: PermissionsServiceDependency,
+):
     """Get node by id."""
-    node = db.get(NodeModel, node_id)
-    if node:
+    node_layer_result = (
+        db.execute(
+            select(NodeModel, LayerModel)
+            .join(LayerModel, NodeModel.layer_id == LayerModel.id)
+            .filter(NodeModel.id == node_id)
+        )
+        .tuples()
+        .one_or_none()
+    )
+    if node_layer_result:
+        node, layer = node_layer_result
+        if not layer or not permission_service.check_for_map_access(
+            user_id=current_user.id,
+            map_id=layer.map_id,
+            map_roles=["OWNER"],
+        ):
+            raise HTTPException(403)
+
         return Node(
             id=node.id,
             layer_id=node.layer_id,
@@ -149,12 +230,29 @@ def get_node(node_id: int, db: DatabaseSession):
 def update_node(
     db: DatabaseSession,
     graph_service: GraphServiceDependency,
+    permission_service: PermissionsServiceDependency,
+    current_user: CurrentUserDependency,
     node_id: int,
     node_data: UpdateNode,
 ):
     """Update node."""
-    node = db.get(NodeModel, node_id)
-    if node:
+    node_layer_result = (
+        db.execute(
+            select(NodeModel, LayerModel)
+            .join(LayerModel, NodeModel.layer_id == LayerModel.id)
+            .filter(NodeModel.id == node_id)
+        )
+        .tuples()
+        .one_or_none()
+    )
+    if node_layer_result:
+        node, layer = node_layer_result
+        if not layer or not permission_service.check_for_map_access(
+            user_id=current_user.id,
+            map_id=layer.map_id,
+            map_roles=["OWNER"],
+        ):
+            raise HTTPException(403)
         graph_service.update_node(node=node, node_data=node_data)
         db.commit()
         return Node(
@@ -172,6 +270,7 @@ def bulk_update_node(
     node_datas: Sequence[BulkUpdateNode],
     db: DatabaseSession,
     graph_service: GraphServiceDependency,
+    current_user: CurrentUserDependency,
 ):
     """Update node."""
     nodes_and_layers = (
