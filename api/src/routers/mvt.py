@@ -58,7 +58,7 @@ def get_tile(layer_id: int, z: int, x: int, y: int, db: DatabaseSession):
                     expanded_bounds.geom
                 )
         )
-        SELECT ST_AsMVT(tile_data, 'nodes', 4096, 'geom')
+        SELECT ST_AsMVT(tile_data, 'nodes', 4096, 'geom', 'id')
         FROM tile_data
         WHERE tile_data.geom IS NOT NULL;
     """)

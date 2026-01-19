@@ -76,7 +76,12 @@ export function updateLayers(
           "source-layer": "nodes",
           paint: {
             "fill-color": "#888888",
-            "fill-opacity": 0.5,
+            "fill-opacity": [
+              "case",
+              ["boolean", ["feature-state", "selected"], false],
+              1, // Selected opacity
+              0.5, // Default opacity
+            ],
           },
         },
         undefined,
@@ -126,6 +131,37 @@ export function updateLayers(
       )
     } else if (!showLabel && labelLayerExists) {
       map.removeLayer(labelLayerId)
+    }
+  })
+}
+
+export function updateSelectedFeatureStates(
+  map: maplibregl.Map,
+  layerId: number,
+  previousSelection: number[],
+  newSelection: number[],
+) {
+  const sourceId = `layer-${layerId.toString()}`
+  const prevSet = new Set(previousSelection)
+  const newSet = new Set(newSelection)
+
+  // Clear features no longer selected
+  previousSelection.forEach((nodeId) => {
+    if (!newSet.has(nodeId)) {
+      map.setFeatureState(
+        { source: sourceId, sourceLayer: "nodes", id: nodeId },
+        { selected: false },
+      )
+    }
+  })
+
+  // Add newly selected features
+  newSelection.forEach((nodeId) => {
+    if (!prevSet.has(nodeId)) {
+      map.setFeatureState(
+        { source: sourceId, sourceLayer: "nodes", id: nodeId },
+        { selected: true },
+      )
     }
   })
 }

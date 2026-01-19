@@ -10,7 +10,8 @@ import {
 } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
 import pluralize from "pluralize"
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
+import { type MapRef } from "react-map-gl/maplibre"
 
 import { useMaps } from "@/app/providers/me-provider/context"
 import { AppRoutes } from "@/app/routes"
@@ -57,6 +58,7 @@ import {
 import { queries } from "@/queries/queries"
 
 import type { BaseMapName } from "./components/map/config"
+import { updateSelectedFeatureStates } from "./components/map/utils"
 
 const BASE_MAPS = [
   { id: "osm", name: "OpenStreetMap" },
@@ -67,6 +69,7 @@ const BASE_MAPS = [
 ]
 
 export default function HomePage() {
+  const mapRef = useRef<MapRef | null>(null)
   const maps = useMaps()
   const currentMap = maps[0]
   const layersQuery = useQuery(queries.listLayers(currentMap.id))
@@ -201,6 +204,15 @@ export default function HomePage() {
                 <Select
                   value={activeLayerId?.toString()}
                   onValueChange={(val) => {
+                    if (mapRef.current && activeLayerId) {
+                      updateSelectedFeatureStates(
+                        mapRef.current.getMap(),
+                        activeLayerId,
+                        selectedNodes,
+                        [],
+                      )
+                      setSelectedNodes([])
+                    }
                     setActiveLayerId(parseInt(val))
                   }}
                 >
@@ -468,6 +480,7 @@ export default function HomePage() {
 
       <PageLayout.FullScreenBody>
         <Map
+          ref={mapRef}
           baseMap={baseMap}
           layers={layers}
           currentTool="lasso"
@@ -477,7 +490,21 @@ export default function HomePage() {
                 { lasso: geojson, layerId: activeLayerId },
                 {
                   onSuccess: (response) => {
-                    setSelectedNodes(response.nodes)
+                    console.log(
+                      mapRef,
+                      activeLayerId,
+                      selectedNodes,
+                      response.nodes,
+                    )
+                    if (mapRef.current) {
+                      updateSelectedFeatureStates(
+                        mapRef.current.getMap(),
+                        activeLayerId,
+                        selectedNodes,
+                        response.nodes,
+                      )
+                      setSelectedNodes(response.nodes)
+                    }
                   },
                 },
               )
