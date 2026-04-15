@@ -8,6 +8,85 @@ import {
   type LayerViewOptions,
 } from "./config"
 
+/**
+ * Build a MapLibre text-field expression that stacks multiple MVT properties
+ * into a single label, one per line.
+ *
+ * - "name" renders as just the node name (no prefix)
+ * - Other keys like "customers_sum" render as "customers (sum): <value>"
+ * - Falls back to ["get", "name"] when the list is empty
+ */
+function buildLabelExpression(
+  labelFields: string[],
+): maplibregl.ExpressionSpecification {
+  const fields = labelFields.length > 0 ? labelFields : ["name"]
+
+  const parts: maplibregl.ExpressionSpecification[] = []
+  for (let i = 0; i < fields.length; i++) {
+    const key = fields[i]
+    if (i > 0) parts.push("\n")
+    if (key === "name") {
+      parts.push(["get", "name"])
+    } else {
+      const lastUs = key.lastIndexOf("_")
+      const prefix =
+        lastUs !== -1
+          ? `${key.slice(0, lastUs)} (${key.slice(lastUs + 1)}): `
+          : `${key}: `
+      parts.push(prefix, ["coalesce", ["to-string", ["get", key]], "—"])
+    }
+  }
+
+  return parts.length === 1
+    ? parts[0]
+    : (["concat", ...parts] as maplibregl.ExpressionSpecification)
+}
+
+const LABEL_BG_IMAGE = "terriscope-label-bg"
+
+/**
+ * Registers a stretchable rounded-rect image with the map (once) that is used
+ * as the background box behind label text via icon-text-fit.
+ */
+function ensureLabelBackground(map: maplibregl.Map): void {
+  if (map.hasImage(LABEL_BG_IMAGE)) return
+
+  const w = 24
+  const h = 24
+  const r = 5
+
+  const canvas = document.createElement("canvas")
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext("2d")
+  if (!ctx) return
+
+  // Rounded rectangle
+  ctx.beginPath()
+  ctx.moveTo(r, 0)
+  ctx.lineTo(w - r, 0)
+  ctx.arcTo(w, 0, w, r, r)
+  ctx.lineTo(w, h - r)
+  ctx.arcTo(w, h, w - r, h, r)
+  ctx.lineTo(r, h)
+  ctx.arcTo(0, h, 0, h - r, r)
+  ctx.lineTo(0, r)
+  ctx.arcTo(0, 0, r, 0, r)
+  ctx.closePath()
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.95)"
+  ctx.fill()
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.15)"
+  ctx.lineWidth = 1
+  ctx.stroke()
+
+  map.addImage(LABEL_BG_IMAGE, ctx.getImageData(0, 0, w, h), {
+    stretchX: [[r, w - r]] as [number, number][],
+    stretchY: [[r, h - r]] as [number, number][],
+    content: [r, r, w - r, h - r] as [number, number, number, number],
+  })
+}
+
 export function updateSources(map: maplibregl.Map, layers: LayerViewOptions) {
   // Basemap source
   Object.entries(BASE_MAP_SOURCES).forEach(([name, source]) => {
@@ -69,8 +148,10 @@ export function updateLayers(
     }
   })
 
+  ensureLabelBackground(map)
+
   layers.forEach((layerOption) => {
-    const { id, showFill, showOutline, showLabel, labelField } = layerOption
+    const { id, showFill, showOutline, showLabel, labelFields } = layerOption
     const fillLayerId = `layer-${id.toString()}-fill`
     const selectionLayerId = `layer-${id.toString()}-selection`
     const outlineLayerId = `layer-${id.toString()}-outline`
@@ -143,6 +224,7 @@ export function updateLayers(
 
     // Label layer — always on top
     const labelLayerExists = map.getLayer(labelLayerId)
+    const textFieldExpr = buildLabelExpression(labelFields)
     if (showLabel && !labelLayerExists) {
       map.addLayer(
         {
@@ -151,22 +233,24 @@ export function updateLayers(
           source: labelSourceId,
           "source-layer": "nodes",
           layout: {
-            "text-field": ["get", labelField ?? "name"],
-            "text-size": ["interpolate", ["linear"], ["zoom"], 4, 10, 10, 13],
+            "icon-image": LABEL_BG_IMAGE,
+            "icon-text-fit": "both",
+            "icon-text-fit-padding": [5, 10, 5, 10],
+            "text-field": textFieldExpr,
+            "text-size": ["interpolate", ["linear"], ["zoom"], 4, 11, 10, 14],
             "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
-            "text-max-width": 8,
+            "text-max-width": 20,
+            "text-line-height": 1.5,
+            "text-justify": "left",
           },
           paint: {
-            "text-color": "#1a1a1a",
-            "text-halo-color": "rgba(255,255,255,0.85)",
-            "text-halo-width": 1.5,
+            "text-color": "#111111",
           },
         },
         undefined,
       )
     } else if (showLabel && labelLayerExists) {
-      // Update text-field in place when the selected label field changes.
-      map.setLayoutProperty(labelLayerId, "text-field", ["get", labelField ?? "name"])
+      map.setLayoutProperty(labelLayerId, "text-field", textFieldExpr)
     } else if (!showLabel && labelLayerExists) {
       map.removeLayer(labelLayerId)
     }

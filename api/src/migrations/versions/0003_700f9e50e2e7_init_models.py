@@ -35,6 +35,11 @@ def upgrade() -> None:
         "maps",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("name", sa.String(), nullable=False),
+        sa.Column(
+            "data_field_config",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=True,
+        ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_maps")),
     )
     op.create_table(
@@ -85,6 +90,26 @@ def upgrade() -> None:
         sa.Column("data_inputs_cache_key", sa.String(), nullable=False),
         sa.Column(
             "geom",
+            Geometry(srid=4326, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
+            nullable=True,
+        ),
+        sa.Column(
+            "geom_z3",
+            Geometry(srid=4326, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
+            nullable=True,
+        ),
+        sa.Column(
+            "geom_z7",
+            Geometry(srid=4326, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
+            nullable=True,
+        ),
+        sa.Column(
+            "geom_z11",
+            Geometry(srid=4326, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
+            nullable=True,
+        ),
+        sa.Column(
+            "geom_z15",
             Geometry(srid=4326, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
             nullable=True,
         ),

@@ -165,3 +165,6 @@ cython_debug/
 #.idea/
 
 test-results/
+
+# Secret files (private files not to be pushed to the repo but handled other ways)
+src/migrations/data/secret/*

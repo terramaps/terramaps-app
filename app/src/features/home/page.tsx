@@ -59,6 +59,7 @@ import {
   SidebarMenuButton,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import {
   Tooltip,
@@ -86,10 +87,8 @@ const BASE_MAPS = [
 export default function HomePage() {
   const mapRef = useRef<MapRef | null>(null)
 
-  // Track labelField for each layer
-  const [labelFields, setLabelFields] = useState<Record<number, string | null>>(
-    {},
-  )
+  // Track which label fields are active per layer (ordered list shown stacked on map)
+  const [labelFields, setLabelFields] = useState<Record<number, string[]>>({})
   const maps = useMaps()
   const [currentMapId, setCurrentMapId] = useState<number>(maps[0]?.id ?? 0)
   const currentMap = maps.find((m) => m.id === currentMapId) ?? maps[0]
@@ -138,7 +137,7 @@ export default function HomePage() {
             showFill: fillLayerId === _layer.id,
             showOutline: borderLayerIds.has(_layer.id),
             showLabel: labelLayerIds.has(_layer.id),
-            labelField: labelFields[_layer.id] ?? "name",
+            labelFields: labelFields[_layer.id] ?? ["name"],
           }))
         : [],
     [layersQuery.data, fillLayerId, borderLayerIds, labelLayerIds, labelFields],
@@ -575,35 +574,44 @@ export default function HomePage() {
                                 }}
                               />
                             </div>
-                            {/* Label field selector */}
+                            {/* Label field checkboxes — shown when labels are on */}
                             {hasLabels && (
-                              <div className="flex items-center justify-between rounded px-1.5 py-1">
-                                <span className="text-muted-foreground text-xs">
-                                  Label Field
-                                </span>
-                                <Select
-                                  value={labelFields[layer.id] ?? "name"}
-                                  onValueChange={(val) => {
-                                    setLabelFields((prev) => ({
-                                      ...prev,
-                                      [layer.id]: val,
-                                    }))
-                                  }}
-                                >
-                                  <SelectTrigger className="w-32">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {labelFieldOptions.map((opt) => (
-                                      <SelectItem
-                                        key={opt.value}
-                                        value={opt.value}
-                                      >
+                              <div className="mt-0.5 space-y-0.5">
+                                {labelFieldOptions.map((opt) => {
+                                  const active =
+                                    labelFields[layer.id] ?? ["name"]
+                                  return (
+                                    <label
+                                      key={opt.value}
+                                      className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-0.5"
+                                    >
+                                      <Checkbox
+                                        checked={active.includes(opt.value)}
+                                        onCheckedChange={(checked) => {
+                                          setLabelFields((prev) => {
+                                            const cur =
+                                              prev[layer.id] ?? ["name"]
+                                            const next: string[] =
+                                              checked === true
+                                                ? cur.includes(opt.value)
+                                                  ? cur
+                                                  : [...cur, opt.value]
+                                                : cur.filter(
+                                                    (f) => f !== opt.value,
+                                                  )
+                                            return {
+                                              ...prev,
+                                              [layer.id]: next,
+                                            }
+                                          })
+                                        }}
+                                      />
+                                      <span className="text-muted-foreground text-xs">
                                         {opt.label}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                      </span>
+                                    </label>
+                                  )
+                                })}
                               </div>
                             )}
                           </div>

@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "pnpm openapi:generate:watch & vite",
+    "dev": "pnpm openapi:generate:watch & vite --port 5174",
     "build": "tsc -b && vite build",
     "openapi:generate": "npx openapi-typescript ../api/openapi.json -o ./src/lib/api/v1.d.ts",
     "openapi:generate:watch": "nodemon --watch ../api/openapi.json --exec 'pnpm openapi:generate'",

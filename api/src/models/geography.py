@@ -14,7 +14,23 @@ class ZipCodeGeography(Base):
     __tablename__ = "geography_zip_codes"
 
     zip_code: Mapped[str] = mapped_column(String(5), primary_key=True)
-    geom: Mapped[WKBElement] = mapped_column(
+    geom: Mapped[WKBElement | None] = mapped_column(
+        Geometry(srid=4326),
+        nullable=True,
+    )
+    geom_z3: Mapped[WKBElement | None] = mapped_column(
+        Geometry(srid=4326),
+        nullable=True,
+    )
+    geom_z7: Mapped[WKBElement | None] = mapped_column(
+        Geometry(srid=4326),
+        nullable=True,
+    )
+    geom_z11: Mapped[WKBElement | None] = mapped_column(
+        Geometry(srid=4326),
+        nullable=True,
+    )
+    geom_z15: Mapped[WKBElement | None] = mapped_column(
         Geometry(srid=4326),
         nullable=True,
     )

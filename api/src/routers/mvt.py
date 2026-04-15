@@ -39,25 +39,35 @@ def get_tile(layer_id: int, z: int, x: int, y: int, db: DatabaseSession):
             ) * 0.1) AS geom
             FROM tile_bounds
         ),
+        filter_bounds AS (
+            SELECT ST_Transform(geom, 4326) AS geom
+            FROM expanded_bounds
+        ),
         tile_data AS (
             SELECT
                 n.id,
                 n.name,
                 n.color,
                 ST_AsMVTGeom(
-                    ST_Transform(n.geom, 3857),
+                    ST_Transform(
+                        CASE
+                            WHEN :z <= 3  THEN COALESCE(n.geom_z3,  n.geom)
+                            WHEN :z <= 7  THEN COALESCE(n.geom_z7,  n.geom)
+                            WHEN :z <= 11 THEN COALESCE(n.geom_z11, n.geom)
+                            WHEN :z <= 15 THEN COALESCE(n.geom_z15, n.geom)
+                            ELSE n.geom
+                        END,
+                        3857
+                    ),
                     (SELECT geom FROM tile_bounds),
                     4096,
                     256,
                     true
                 ) AS geom
-            FROM nodes n, expanded_bounds
+            FROM nodes n
             WHERE n.layer_id = :layer_id
               AND n.geom IS NOT NULL
-              AND ST_Intersects(
-                    ST_Transform(n.geom, 3857),
-                    expanded_bounds.geom
-                )
+              AND ST_Intersects(n.geom, (SELECT geom FROM filter_bounds))
         )
         SELECT ST_AsMVT(tile_data, 'nodes', 4096, 'geom', 'id')
         FROM tile_data
@@ -107,8 +117,8 @@ def get_label_tile(layer_id: int, z: int, x: int, y: int, db: DatabaseSession):
         for field_config in data_field_config:
             for agg in field_config.get("aggregations", []):
                 key = f"{field_config['field']}_{agg}"
-                extra_label_selects += f",\n                n.data->>{key!r} AS \"{key}\""
-                extra_tile_selects += f",\n                lp.\"{key}\""
+                extra_label_selects += f',\n                n.data->>{key!r} AS "{key}"'
+                extra_tile_selects += f',\n                lp."{key}"'
 
     query = text(f"""
         WITH tile_bounds AS (

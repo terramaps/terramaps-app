@@ -1,3 +1,4 @@
+name: terramaps
 services:
   api:
     image: terriscope/api:latest
@@ -10,7 +11,7 @@ services:
       - .env.local
     command: --reload
     ports:
-      - "8000:8000"
+      - "8042:8000"
     volumes:
       - ./src:/app/src
       - type: bind
@@ -37,7 +38,7 @@ services:
       POSTGRES_PASSWORD: terriscope
       POSTGRES_DB: app
     ports:
-      - "5432:5432"
+      - "15432:5432"
     healthcheck:
       test: ["CMD", "pg_isready", "-d", "app", "-U", "terriscope"]
       interval: 30s

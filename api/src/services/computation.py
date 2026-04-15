@@ -7,7 +7,8 @@ from typing import Annotated
 from fastapi import Depends
 from geoalchemy2.elements import WKBElement
 from sqlalchemy import bindparam, select, text
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB as PgJSONB
+from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import JSONB as PgJSONB
 from sqlalchemy.orm import Session
 
 from src.app.database import DatabaseSession
@@ -54,6 +55,10 @@ class ComputationService(BaseService):
                 ), upd AS (
                   UPDATE nodes p
                   SET geom = calc.union_geom,
+                      geom_z3  = ST_Transform(ST_MakeValid(ST_SnapToGrid(ST_Transform(calc.union_geom, 3857), 19568.0)), 4326),
+                      geom_z7  = ST_Transform(ST_MakeValid(ST_SnapToGrid(ST_Transform(calc.union_geom, 3857),  1223.0)), 4326),
+                      geom_z11 = ST_Transform(ST_MakeValid(ST_SnapToGrid(ST_Transform(calc.union_geom, 3857),    76.0)), 4326),
+                      geom_z15 = ST_Transform(ST_MakeValid(ST_SnapToGrid(ST_Transform(calc.union_geom, 3857),     4.8)), 4326),
                       geom_inputs_cache_key = calc.inputs_hash,
                       geom_cache_key = md5(ST_AsEWKB(calc.union_geom)::text)
                   FROM calc
@@ -153,6 +158,10 @@ class ComputationService(BaseService):
             ), upd AS (
               UPDATE nodes p
               SET geom = calc.union_geom,
+                  geom_z3  = ST_Transform(ST_MakeValid(ST_SnapToGrid(ST_Transform(calc.union_geom, 3857), 19568.0)), 4326),
+                  geom_z7  = ST_Transform(ST_MakeValid(ST_SnapToGrid(ST_Transform(calc.union_geom, 3857),  1223.0)), 4326),
+                  geom_z11 = ST_Transform(ST_MakeValid(ST_SnapToGrid(ST_Transform(calc.union_geom, 3857),    76.0)), 4326),
+                  geom_z15 = ST_Transform(ST_MakeValid(ST_SnapToGrid(ST_Transform(calc.union_geom, 3857),     4.8)), 4326),
                   geom_inputs_cache_key = calc.inputs_hash,
                   geom_cache_key = md5(ST_AsEWKB(calc.union_geom)::text)
               FROM calc

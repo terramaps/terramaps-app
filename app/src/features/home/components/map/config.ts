@@ -6,8 +6,8 @@ export type LayerViewOption = {
   showFill: boolean
   showOutline: boolean
   showLabel: boolean
-  /** Which property to render as the map label. null means use "name". */
-  labelField: string | null
+  /** Ordered list of MVT property keys to stack in the map label. Defaults to ["name"]. */
+  labelFields: string[]
 }
 
 export type LayerViewOptions = LayerViewOption[]

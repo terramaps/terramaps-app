@@ -1,3 +1,4 @@
+name: terramaps
 services:
   api:
     image: terriscope/api-debug:latest

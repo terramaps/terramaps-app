@@ -860,6 +860,28 @@
         }
       }
     },
+    "/maps/test-all-zips": {
+      "post": {
+        "tags": [
+          "Maps"
+        ],
+        "summary": "Create Test All Zips Map",
+        "description": "Test endpoint: creates a map with one layer where every zip code is a parentless node.",
+        "operationId": "create_test_all_zips_map_maps_test_all_zips_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Map"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/spatial/select": {
       "post": {
         "tags": [

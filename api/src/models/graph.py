@@ -68,6 +68,26 @@ class NodeModel(Base):
         nullable=True,
         deferred=True,
     )
+    geom_z3: Mapped[WKBElement | None] = mapped_column(
+        Geometry(srid=4326),
+        nullable=True,
+        deferred=True,
+    )
+    geom_z7: Mapped[WKBElement | None] = mapped_column(
+        Geometry(srid=4326),
+        nullable=True,
+        deferred=True,
+    )
+    geom_z11: Mapped[WKBElement | None] = mapped_column(
+        Geometry(srid=4326),
+        nullable=True,
+        deferred=True,
+    )
+    geom_z15: Mapped[WKBElement | None] = mapped_column(
+        Geometry(srid=4326),
+        nullable=True,
+        deferred=True,
+    )
     geom_cache_key: Mapped[str]
     geom_inputs_cache_key: Mapped[str]
 
