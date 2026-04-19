@@ -66,7 +66,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Map } from "@/features/home/components/map"
+import { Map, type HoverHierarchyItem } from "@/features/home/components/map"
 import { DeleteDialog } from "@/features/home/components/delete-dialog"
 import { MergeDialog } from "@/features/home/components/merge-dialog"
 import { MoveDialog } from "@/features/home/components/move-dialog"
@@ -142,6 +142,8 @@ export default function HomePage() {
 
   // Search / detail sheet state
   const [detailResult, setDetailResult] = useState<SearchResultItem | null>(null)
+
+  const [hoveredHierarchy, setHoveredHierarchy] = useState<HoverHierarchyItem[]>([])
 
   const handleSearchSelect = (result: SearchResultItem) => {
     // Fly map to the result's centroid if geometry is available
@@ -789,7 +791,35 @@ export default function HomePage() {
             }}
             selectedNodeIds={selectedNodeIds}
             selectedZipCodes={selectedZipCodes}
+            onHover={setHoveredHierarchy}
+            onHoverEnd={() => setHoveredHierarchy([])}
           />
+
+          {hoveredHierarchy.length > 0 && (
+            <div className="absolute top-4 right-4 rounded-lg border bg-background/90 px-3 py-2 shadow-md backdrop-blur-sm pointer-events-none">
+              <div className="space-y-0.5">
+                {[...hoveredHierarchy]
+                  .sort((a, b) => {
+                    const aOrder = layersQuery.data?.find((l) => l.id === a.layerId)?.order ?? 0
+                    const bOrder = layersQuery.data?.find((l) => l.id === b.layerId)?.order ?? 0
+                    return bOrder - aOrder
+                  })
+                  .map(({ layerId, name }) => {
+                    const layer = layersQuery.data?.find((l) => l.id === layerId)
+                    return (
+                      <div key={layerId} className="flex items-baseline gap-2">
+                        <span className="text-muted-foreground text-xs w-16 shrink-0 truncate text-right">
+                          {layer?.name ?? ""}
+                        </span>
+                        <span className="text-foreground text-xs font-medium truncate max-w-40">
+                          {name}
+                        </span>
+                      </div>
+                    )
+                  })}
+              </div>
+            </div>
+          )}
 
           <div className="absolute bottom-4 left-4 flex flex-col gap-0.5 rounded-lg border bg-background/90 p-1 shadow-md backdrop-blur-sm">
             {(

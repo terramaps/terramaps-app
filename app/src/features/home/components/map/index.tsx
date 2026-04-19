@@ -29,6 +29,8 @@ const INITIAL_VIEW_STATE = {
   zoom: 4,
 }
 
+export type HoverHierarchyItem = { layerId: number; name: string }
+
 export const Map = forwardRef<
   MapRef | null,
   {
@@ -39,8 +41,10 @@ export const Map = forwardRef<
     selectedZipCodes: string[]
     tileVersion: number
     onLassoComplete: (points: Polygon) => void
+    onHover?: (items: HoverHierarchyItem[]) => void
+    onHoverEnd?: () => void
   }
->(({ baseMap, layers, onLassoComplete, currentTool, tileVersion }, ref) => {
+>(({ baseMap, layers, onLassoComplete, currentTool, tileVersion, onHover, onHoverEnd }, ref) => {
   const mapRef = useRef<MapRef | null>(null)
   useImperativeHandle(ref, () => mapRef.current as MapRef)
 
@@ -146,6 +150,33 @@ export const Map = forwardRef<
       const point: [number, number] = [e.lngLat.lng, e.lngLat.lat]
       const newPoints = [...lassoPoints, point]
       setLassoPoints(newPoints)
+      return
+    }
+
+    if (onHover) {
+      const map = mapRef.current?.getMap()
+      if (!map) return
+      const currentLayers = layersRef.current
+      const selectionLayerIds = currentLayers
+        .map((l) => `layer-${l.id.toString()}-selection`)
+        .filter((id) => map.getLayer(id))
+      const features = map.queryRenderedFeatures(e.point, { layers: selectionLayerIds })
+      const seen = new Set<number>()
+      const items: HoverHierarchyItem[] = []
+      for (const feature of features) {
+        const match = /^layer-(\d+)-selection$/.exec(feature.layer.id)
+        if (!match) continue
+        const layerId = parseInt(match[1])
+        if (seen.has(layerId)) continue
+        seen.add(layerId)
+        const layerOption = currentLayers.find((l) => l.id === layerId)
+        const name =
+          layerOption?.order === 0
+            ? (feature.properties?.zip_code as string | undefined) ?? ""
+            : (feature.properties?.name as string | undefined) ?? ""
+        if (name) items.push({ layerId, name })
+      }
+      onHover(items)
     }
   }
 
@@ -174,6 +205,7 @@ export const Map = forwardRef<
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
+        onMouseOut={onHoverEnd}
         cursor={currentTool === "lasso" ? "crosshair" : "grab"}
         initialViewState={INITIAL_VIEW_STATE}
         mapStyle={EMPTY_STYLE}
