@@ -1,0 +1,65 @@
+name: Build and push images
+on:
+  push:
+    branches:
+      - develop
+      - feature/*
+      - release/*
+    tags:
+      - v*
+concurrency:
+  group: >
+    ${{ github.workflow }}-${{
+      startsWith(github.ref, 'refs/heads/feature/')
+        && github.ref_name
+        || github.sha
+    }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/heads/feature/') }}
+
+jobs:
+  exists:
+    name: Check if images already exist
+    uses: ./.github/workflows/exists.yml
+  build:
+    # Don't build on tags — tags just retag existing built images
+    needs: [exists]
+    if: needs.exists.outputs.exists == '0'
+    name: Build images
+    uses: ./.github/workflows/build.yml
+  push:
+    # Only push on develop, release/*, or tags
+    if: (github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/tags/v'))
+    needs: [build]
+    name: Push images
+    uses: ./.github/workflows/push.yml
+  retag-latest:
+    # Retag as `latest` on develop
+    needs: [exists, build, push]
+    if: >
+      always() &&
+      (needs.exists.result == 'success' || needs.exists.result == 'skipped') &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped') &&
+      (needs.push.result == 'success' || needs.push.result == 'skipped') &&
+      github.ref == 'refs/heads/develop'
+    name: Retag latest images
+    uses: ./.github/workflows/tag.yml
+    with:
+      tag: latest
+      override: true
+  retag-release:
+    # Retag with the version tag on tagged releases
+    needs: [exists, build, push]
+    if: >
+      always() &&
+      (needs.exists.result == 'success' || needs.exists.result == 'skipped') &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped') &&
+      (needs.push.result == 'success' || needs.push.result == 'skipped') &&
+      startsWith(github.ref, 'refs/tags/v')
+    name: Retag release images
+    uses: ./.github/workflows/tag.yml
+    with:
+      tag: ${{ github.ref_name }}
+  deploy:
+    needs: [retag-latest]
+    name: Deploy to dev
+    uses: ./.github/workflows/deploy.yml

@@ -1,0 +1,19 @@
+name: Deploy
+on: [workflow_call]
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  redeploy-dev:
+    name: Force new deployment of services in dev
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Authenticate with IAM
+        uses: terramaps/terramaps-infra/.github/actions/iam-auth@main
+        with:
+          role-arn: arn:aws:iam::650136199785:role/github/deploy_role
+      - name: Redeploy dev environment
+        run: |
+          echo "Looks good!"

@@ -1,0 +1,57 @@
+name: Image existence check
+on:
+  workflow_call:
+    outputs:
+      exists:
+        description: "Have images been pushed to ECR for this commit hash?"
+        value: ${{ jobs.exists.outputs.exists }}
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  exists:
+    name: Check if images already exist
+    runs-on: ubuntu-latest
+    env:
+      ECR_REPO_BASE: "686519988262.dkr.ecr.us-east-1.amazonaws.com/terramaps"
+      IMAGE_NAMES: "app api worker migrations"
+    outputs:
+      exists: ${{ steps.exists.outputs.exists }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set Short SHA
+        uses: ./.github/actions/short-sha
+      - name: Authenticate with IAM
+        uses: terramaps/terramaps-infra/.github/actions/iam-auth@main
+        with:
+          role-arn: arn:aws:iam::686519988262:role/github/ecr_builder
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Check if images exist
+        id: exists
+        run: |
+          DOES_EXIST=0
+          DOES_NOT_EXIST=0
+          for name in $IMAGE_NAMES; do
+            IMAGE_EXISTS=$(
+              aws ecr list-images --repository-name terramaps/${name} --query "imageIds[?imageTag=='${{ env.short_sha }}'].imageTag" --output text
+            )
+            if [[ -z "$IMAGE_EXISTS" ]]; then
+              DOES_NOT_EXIST=1
+              echo "Image ${name} does not exist"
+            else
+              DOES_EXIST=1
+              echo "Image ${name} exists"
+            fi
+          done
+          if [[ $DOES_NOT_EXIST -eq 1 && $DOES_EXIST -eq 1 ]]; then
+            echo "Error: Some images exist and some do not"
+            exit 1
+          elif [[ $DOES_NOT_EXIST -eq 1 ]]; then
+            echo "Success: no images exist for this commit"
+            echo exists=0 >> "$GITHUB_OUTPUT"
+          else
+            echo "Success: all images exist for this commit"
+            echo exists=1 >> "$GITHUB_OUTPUT"
+          fi

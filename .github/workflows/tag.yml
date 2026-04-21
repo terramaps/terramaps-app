@@ -1,0 +1,45 @@
+name: Retag
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "New tag to associate short sha with"
+        required: false
+        type: string
+      override:
+        description: "Clear existing image with matching tag"
+        required: false
+        type: boolean
+        default: false
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  retag:
+    name: Retag images in ECR
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_NAMES: "app api worker migrations"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Authenticate with IAM
+        uses: terramaps/terramaps-infra/.github/actions/iam-auth@main
+        with:
+          role-arn: arn:aws:iam::686519988262:role/github/ecr_builder
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Set Short SHA
+        uses: ./.github/actions/short-sha
+      - name: Delete existing images if override set
+        if: ${{ inputs.override == true }}
+        run: |
+          for name in $IMAGE_NAMES; do
+            aws ecr batch-delete-image --repository-name terramaps/${name} --image-ids imageTag=${{ inputs.tag }} || true
+          done
+      - name: Retag images
+        run: |
+          for name in $IMAGE_NAMES; do
+            MANIFEST=$(aws ecr batch-get-image --repository-name terramaps/${name} --image-ids imageTag=${{ env.short_sha }} --output text --query 'images[].imageManifest')
+            aws ecr put-image --repository-name terramaps/${name} --image-tag ${{ inputs.tag }} --image-manifest "$MANIFEST"
+          done

@@ -1,0 +1,18 @@
+name: "load-images"
+description: "load all known images into docker engine from artifact"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Download artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: images
+        path: /tmp
+    - name: Load images
+      shell: bash
+      run: |
+        docker load --input /tmp/app.tar
+        docker load --input /tmp/api.tar
+        docker load --input /tmp/worker.tar
+        docker load --input /tmp/migrations.tar

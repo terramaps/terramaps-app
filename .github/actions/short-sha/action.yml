@@ -1,0 +1,11 @@
+name: "short-sha"
+description: "sets `short_sha` env variable based on git sha"
+
+runs:
+  using: "composite"
+  steps:
+    - id: short_sha
+      shell: bash
+      run: |
+        SHA=${{ github.sha }}
+        echo short_sha=${SHA:0:20} >> "$GITHUB_ENV"

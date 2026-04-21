@@ -1,0 +1,34 @@
+name: Build
+on: [workflow_call]
+jobs:
+  build-images:
+    name: Build and save images
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_NAMES: "app api worker migrations"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build api image
+        run: |
+          docker build . -f api/Dockerfile --platform linux/amd64 --target api -t terramaps/api:latest
+      - name: Build worker image
+        run: |
+          docker build . -f api/Dockerfile --platform linux/amd64 --target worker -t terramaps/worker:latest
+      - name: Build migrations image
+        run: |
+          docker build . -f api/Dockerfile --platform linux/amd64 --target migrations -t terramaps/migrations:latest
+      - name: Build app image
+        run: |
+          docker build app -f app/Dockerfile --platform linux/amd64 -t terramaps/app:latest
+      - name: Export images to tar
+        run: |
+          for name in $IMAGE_NAMES; do
+            docker save -o /tmp/${name}.tar terramaps/${name}:latest
+          done
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: images
+          path: /tmp/*.tar
+          compression-level: 0

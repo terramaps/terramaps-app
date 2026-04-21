@@ -1,0 +1,35 @@
+name: Push
+on: [workflow_call]
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  push-images:
+    name: Push images to ECR
+    runs-on: ubuntu-latest
+    env:
+      ECR_REPO_BASE: "686519988262.dkr.ecr.us-east-1.amazonaws.com/terramaps"
+      IMAGE_NAMES: "app api worker migrations"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Load images
+        uses: ./.github/actions/load-images
+      - name: Set Short SHA
+        uses: ./.github/actions/short-sha
+      - name: Retag images with short sha
+        run: |
+          for name in $IMAGE_NAMES; do
+            docker tag terramaps/${name}:latest ${{ env.ECR_REPO_BASE }}/${name}:${{ env.short_sha }}
+          done
+      - name: Authenticate with IAM
+        uses: terramaps/terramaps-infra/.github/actions/iam-auth@main
+        with:
+          role-arn: arn:aws:iam::686519988262:role/github/ecr_builder
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Push images with short sha
+        run: |
+          for name in $IMAGE_NAMES; do
+            docker push ${{ env.ECR_REPO_BASE }}/${name}:${{ env.short_sha }}
+          done
