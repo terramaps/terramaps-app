@@ -13,7 +13,7 @@ jobs:
       - name: Authenticate with IAM
         uses: terramaps/terramaps-infra/.github/actions/iam-auth@main
         with:
-          role-arn: arn:aws:iam::650136199785:role/github/deploy_role
+          role-arn: arn:aws:iam::336519019521:role/github/deploy_role
       - name: Redeploy dev environment
         run: |
           aws ecs update-service --cluster terramaps-dev-cluster --service api --force-new-deployment
