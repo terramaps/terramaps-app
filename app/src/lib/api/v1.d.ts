@@ -958,7 +958,7 @@ export interface components {
          */
         Node: {
             /** Id */
-            id: number | "default";
+            id: number;
             /** Layer Id */
             layer_id: number;
             /** Name */

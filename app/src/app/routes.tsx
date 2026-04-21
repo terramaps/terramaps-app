@@ -43,16 +43,18 @@ export type RouteParamsType = {
   }
 }
 
-export type ExtractPathParams<T extends PageName & keyof RouteParamsType> =
-  // @ts-expect-error we need to review and fix this eventually
-  RouteParamsType[T]["path"] extends Record<string, string>
-    ? // @ts-expect-error we need to review and fix this eventually
-      RouteParamsType[T]["path"]
+export type ExtractPathParams<T extends PageName> =
+  T extends keyof RouteParamsType
+    ? RouteParamsType[T] extends { path: Record<string, string> }
+      ? RouteParamsType[T]["path"]
+      : undefined
     : undefined
 
-export type ExtractQueryParams<T extends PageName & keyof RouteParamsType> =
-  RouteParamsType[T]["query"] extends Record<string, string | number>
-    ? RouteParamsType[T]["query"]
+export type ExtractQueryParams<T extends PageName> =
+  T extends keyof RouteParamsType
+    ? RouteParamsType[T] extends { query: Record<string, string | number> }
+      ? RouteParamsType[T]["query"]
+      : undefined
     : undefined
 
 const Routes: Record<PageName, Route> = {
@@ -110,7 +112,7 @@ class RouteClass<T extends PageName> {
 
     if (pathParams) {
       for (const key in pathParams) {
-        path = path.replace(`:${key}`, pathParams[key])
+        path = path.replace(`:${key}`, (pathParams as Record<string, string>)[key])
       }
     }
 

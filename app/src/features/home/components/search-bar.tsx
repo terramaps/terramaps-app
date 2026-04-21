@@ -18,7 +18,7 @@ import { queries } from "@/queries/queries"
 export type SearchResultItem = components["schemas"]["SearchResultItem"]
 
 interface SearchBarProps {
-  mapId: number
+  mapId: string
   onSelect: (result: SearchResultItem) => void
   className?: string
 }

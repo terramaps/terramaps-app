@@ -1,6 +1,6 @@
 import { useSearchParams } from "react-router-dom"
 
-import { ExtractQueryParams, PageName, RouteParamsType } from "@/app/routes"
+import type { ExtractQueryParams, PageName, RouteParamsType } from "@/app/routes"
 
 export function useQueryParams<T extends PageName & keyof RouteParamsType>(): [
   Partial<ExtractQueryParams<T>>,

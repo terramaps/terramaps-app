@@ -1,6 +1,7 @@
 export type LayerField = {
   name: string
   header: string
+  parentHeader?: string
 }
 export type LayerFields = LayerField[]
 export type DataFieldAggregation = "sum" | "avg"

@@ -47,7 +47,7 @@ export default function SettingsPage() {
     e.preventDefault()
     setSaveSuccess(false)
     updateMeMutation.mutate(
-      { name: name.trim() || null},
+      { name: name.trim() || null, avatar_url: null },
       {
         onSuccess: () => {
           setSaveSuccess(true)

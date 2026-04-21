@@ -2256,15 +2256,7 @@
       "Node": {
         "properties": {
           "id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "string",
-                "const": "default"
-              }
-            ],
+            "type": "integer",
             "title": "Id"
           },
           "layer_id": {

@@ -1,9 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import type { Polygon } from "geojson"
 import type { FetchResponse } from "openapi-fetch"
-import { useNavigate } from "react-router-dom"
 
-import { AppRoutes, PageName } from "@/app/routes"
 import { fetchClient } from "@/fetch-client"
 import type { components, paths } from "@/lib/api/v1"
 
@@ -214,7 +212,7 @@ export const useUpdateNodeMutation = () => {
   return useMutation({
     mutationFn: async (vars: {
       nodeId: number
-      mapId: number
+      mapId: string
       name: string
       color: string
       parentNodeId: number | null

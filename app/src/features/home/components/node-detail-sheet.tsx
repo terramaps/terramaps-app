@@ -105,7 +105,7 @@ function NodeDetail({
   const handleSave = () => {
     if (!node) return
     updateMutation.mutate(
-      { nodeId, mapId: layer?.map_id ?? 0, name, color, parentNodeId },
+      { nodeId, mapId: layer?.map_id ?? "", name, color, parentNodeId },
       { onSuccess: () => setEditing(false) },
     )
   }

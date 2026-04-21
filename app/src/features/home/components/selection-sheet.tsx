@@ -46,7 +46,6 @@ export function SelectionSheet({
   activeLayer,
   layers,
   dataFieldConfig,
-  onClose,
 }: SelectionSheetProps) {
   const isZipLayer = activeLayer?.order === 0
   const count = isZipLayer ? selectedZipCodes.length : selectedNodeIds.length
@@ -236,7 +235,7 @@ function NodeDetailView({
   const handleSave = () => {
     if (!node) return
     updateMutation.mutate(
-      { nodeId, mapId: activeLayer?.map_id ?? 0, name, color, parentNodeId },
+      { nodeId, mapId: activeLayer?.map_id ?? "", name, color, parentNodeId },
       { onSuccess: () => setEditing(false) },
     )
   }
@@ -362,10 +361,10 @@ function NodeDetailView({
                         field.aggregations.map((agg) => {
                           const key = `${field.field}_${agg}`
                           const raw = node.data?.[key]
-                          const formatted =
+                          const formatted: string =
                             typeof raw === "number"
                               ? new Intl.NumberFormat().format(raw)
-                              : (raw ?? "—")
+                              : String(raw ?? "—")
                           return (
                             <div key={key} className="flex items-center justify-between gap-4">
                               <span className="text-muted-foreground truncate text-sm">
@@ -568,10 +567,10 @@ function ZipDetailView({
                         field.aggregations.map((agg) => {
                           const key = `${field.field}_${agg}`
                           const raw = za.data?.[key]
-                          const formatted =
+                          const formatted: string =
                             typeof raw === "number"
                               ? new Intl.NumberFormat().format(raw)
-                              : (raw ?? "—")
+                              : String(raw ?? "—")
                           return (
                             <div key={key} className="flex items-center justify-between gap-4">
                               <span className="text-muted-foreground truncate text-sm">

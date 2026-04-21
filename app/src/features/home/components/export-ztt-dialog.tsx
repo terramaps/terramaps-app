@@ -18,7 +18,7 @@ type Layer = components["schemas"]["Layer"]
 interface ExportZttDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  mapId: number
+  mapId: string
   mapName: string
   layers: Layer[]
 }

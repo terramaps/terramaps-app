@@ -58,7 +58,7 @@ class NodeAncestor(BaseModel):
 class Node(BaseModel):
     """Node."""
 
-    id: int | Literal["default"]
+    id: int
     layer_id: int
     name: str
     color: str

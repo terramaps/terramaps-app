@@ -42,14 +42,14 @@ const WIZARD_STEPS_COUNT = 4
 
 export default function InitializePage() {
   const [activeStepIdx, setActiveStepIdx] = React.useState<number>(0)
-  const [processingMapId, setProcessingMapId] = React.useState<number | null>(null)
+  const [processingMapId, setProcessingMapId] = React.useState<string | null>(null)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const importMutation = useImportMapMutation()
 
   // Poll the map once the import task is queued
   const mapQuery = useQuery({
-    ...queries.getMap(processingMapId ?? 0),
+    ...queries.getMap(processingMapId ?? ""),
     enabled: processingMapId != null,
   })
 
