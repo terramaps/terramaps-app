@@ -29,6 +29,11 @@ services:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1024M
   worker:
     image: terramaps/worker-local:latest
     build:
@@ -66,6 +71,11 @@ services:
       retries: 6
       timeout: 10s
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
   flower:
     image: mher/flower
     command: ["celery", "flower"]
@@ -95,6 +105,11 @@ services:
       timeout: 60s
       retries: 5
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1024M
   migrations:
     image: terramaps/migrations-local:latest
     build:
@@ -107,6 +122,11 @@ services:
     volumes:
       - ./src:/app/src
       - ./src/migrations/versions:/app/src/migrations/versions
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
     depends_on:
       db:
         condition: service_healthy

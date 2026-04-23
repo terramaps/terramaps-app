@@ -56,17 +56,32 @@ _COPY_SQL = text("""
 """)
 
 
+_CHUNK_SIZE = 4 * 1024 * 1024  # 4 MB — amortizes Python overhead; peak mem ~2x chunk
+
+
+def _iter_sql_statements(path: Path):
+    # ";\n" is safe as a delimiter — WKT coordinate strings never contain that sequence.
+    buf = ""
+    with path.open() as f:
+        while chunk := f.read(_CHUNK_SIZE):
+            buf += chunk
+            while ";\n" in buf:
+                idx = buf.index(";\n")
+                stmt = buf[:idx].strip()
+                if stmt:
+                    yield stmt
+                buf = buf[idx + 2 :]
+    if stmt := buf.strip():
+        yield stmt
+
+
 def upgrade() -> None:
     """Upgrade revisions: dc2613846b7f to bd9a96a540db."""
     connection = op.get_bind()
 
     # Load Boundary_Data from the vendor SQL dump (creates the table + inserts all rows).
-    # Split on ";\n" — safe because WKT coordinate strings never contain that sequence.
-    sql_content = _SQL_FILE.read_text()
-    for statement in sql_content.split(";\n"):
-        stmt = statement.strip()
-        if stmt:
-            connection.exec_driver_sql(stmt)
+    for stmt in _iter_sql_statements(_SQL_FILE):
+        connection.exec_driver_sql(stmt)
 
     # Copy into geography_zip_codes with all zoom levels computed in one pass.
     connection.execute(_COPY_SQL)
