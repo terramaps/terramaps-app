@@ -55,11 +55,6 @@ def upgrade() -> None:
             Geometry(srid=4326, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
             nullable=True,
         ),
-        sa.Column(
-            "geom_z15",
-            Geometry(srid=4326, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
-            nullable=True,
-        ),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.PrimaryKeyConstraint("zip_code", name=op.f("pk_geography_zip_codes")),
@@ -76,14 +71,6 @@ def upgrade() -> None:
         "idx_geography_zip_codes_geom_z11",
         "geography_zip_codes",
         ["geom_z11"],
-        unique=False,
-        postgresql_using="gist",
-        postgresql_ops={},
-    )
-    op.create_geospatial_index(
-        "idx_geography_zip_codes_geom_z15",
-        "geography_zip_codes",
-        ["geom_z15"],
         unique=False,
         postgresql_using="gist",
         postgresql_ops={},
@@ -106,7 +93,7 @@ def upgrade() -> None:
     )
     op.create_table(
         "maps",
-        sa.Column("id", postgresql.UUID(as_uuid=False), nullable=False, server_default=sa.text("gen_random_uuid()")),
+        sa.Column("id", sa.UUID(as_uuid=False), server_default=sa.text("gen_random_uuid()"), nullable=False),
         sa.Column("name", sa.String(), nullable=False),
         sa.Column("tile_version", sa.Integer(), server_default="0", nullable=False),
         sa.Column("data_field_config", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
@@ -128,7 +115,7 @@ def upgrade() -> None:
     op.create_table(
         "layers",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("map_id", postgresql.UUID(as_uuid=False), nullable=False),
+        sa.Column("map_id", sa.UUID(as_uuid=False), nullable=False),
         sa.Column("name", sa.String(), nullable=False),
         sa.Column("order", sa.Integer(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
@@ -142,10 +129,8 @@ def upgrade() -> None:
     op.create_table(
         "map_jobs",
         sa.Column("id", sa.String(length=36), nullable=False),
-        sa.Column("map_id", postgresql.UUID(as_uuid=False), nullable=False),
-        sa.Column(
-            "job_type", sa.Enum("import", "recompute_geometry", "recompute_data", native_enum=False), nullable=False
-        ),
+        sa.Column("map_id", sa.UUID(as_uuid=False), nullable=False),
+        sa.Column("job_type", sa.Enum("import", native_enum=False), nullable=False),
         sa.Column("status", sa.Enum("pending", "processing", "complete", "failed", native_enum=False), nullable=False),
         sa.Column("step", sa.Text(), nullable=True),
         sa.Column("error", sa.Text(), nullable=True),
@@ -159,7 +144,7 @@ def upgrade() -> None:
         "user_map_roles",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
-        sa.Column("map_id", postgresql.UUID(as_uuid=False), nullable=False),
+        sa.Column("map_id", sa.UUID(as_uuid=False), nullable=False),
         sa.Column("role", sa.Enum("OWNER", "MEMBER", native_enum=False), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
@@ -171,88 +156,6 @@ def upgrade() -> None:
     op.create_index(
         "uq_map_owner", "user_map_roles", ["map_id"], unique=True, postgresql_where=sa.text("role = 'OWNER'")
     )
-    op.create_geospatial_table(
-        "nodes",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("layer_id", sa.Integer(), nullable=False),
-        sa.Column("name", sa.String(), nullable=False),
-        sa.Column("color", sa.String(), nullable=False),
-        sa.Column("data", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("data_cache_key", sa.String(), nullable=False),
-        sa.Column("data_inputs_cache_key", sa.String(), nullable=False),
-        sa.Column(
-            "geom",
-            Geometry(srid=4326, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
-            nullable=True,
-        ),
-        sa.Column(
-            "geom_z3",
-            Geometry(srid=4326, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
-            nullable=True,
-        ),
-        sa.Column(
-            "geom_z7",
-            Geometry(srid=4326, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
-            nullable=True,
-        ),
-        sa.Column(
-            "geom_z11",
-            Geometry(srid=4326, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
-            nullable=True,
-        ),
-        sa.Column(
-            "geom_z15",
-            Geometry(srid=4326, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
-            nullable=True,
-        ),
-        sa.Column("geom_cache_key", sa.String(), nullable=False),
-        sa.Column("geom_inputs_cache_key", sa.String(), nullable=False),
-        sa.Column("parent_node_id", sa.Integer(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.ForeignKeyConstraint(["layer_id"], ["layers.id"], name=op.f("fk_nodes_layer_id_layers")),
-        sa.ForeignKeyConstraint(["parent_node_id"], ["nodes.id"], name=op.f("fk_nodes_parent_node_id_nodes")),
-        sa.PrimaryKeyConstraint("id", name=op.f("pk_nodes")),
-        sa.UniqueConstraint("layer_id", "name", name=op.f("uq_nodes_layer_id")),
-    )
-    op.create_geospatial_index(
-        "idx_nodes_geom", "nodes", ["geom"], unique=False, postgresql_using="gist", postgresql_ops={}
-    )
-    op.create_geospatial_index(
-        "idx_nodes_geom_z11", "nodes", ["geom_z11"], unique=False, postgresql_using="gist", postgresql_ops={}
-    )
-    op.create_geospatial_index(
-        "idx_nodes_geom_z15", "nodes", ["geom_z15"], unique=False, postgresql_using="gist", postgresql_ops={}
-    )
-    op.create_geospatial_index(
-        "idx_nodes_geom_z3", "nodes", ["geom_z3"], unique=False, postgresql_using="gist", postgresql_ops={}
-    )
-    op.create_geospatial_index(
-        "idx_nodes_geom_z7", "nodes", ["geom_z7"], unique=False, postgresql_using="gist", postgresql_ops={}
-    )
-    op.create_index("idx_nodes_layer_id", "nodes", ["layer_id"], unique=False)
-    op.create_index("idx_nodes_parent_node_id", "nodes", ["parent_node_id"], unique=False)
-    op.create_table(
-        "zip_assignments",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("layer_id", sa.Integer(), nullable=False),
-        sa.Column("zip_code", sa.String(length=5), nullable=False),
-        sa.Column("parent_node_id", sa.Integer(), nullable=True),
-        sa.Column("color", sa.String(), nullable=False),
-        sa.Column("data", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("data_cache_key", sa.String(), nullable=False),
-        sa.Column("data_inputs_cache_key", sa.String(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.ForeignKeyConstraint(["layer_id"], ["layers.id"], name=op.f("fk_zip_assignments_layer_id_layers")),
-        sa.ForeignKeyConstraint(["parent_node_id"], ["nodes.id"], name=op.f("fk_zip_assignments_parent_node_id_nodes")),
-        sa.ForeignKeyConstraint(
-            ["zip_code"], ["geography_zip_codes.zip_code"], name=op.f("fk_zip_assignments_zip_code_geography_zip_codes")
-        ),
-        sa.PrimaryKeyConstraint("id", name=op.f("pk_zip_assignments")),
-        sa.UniqueConstraint("layer_id", "zip_code", name=op.f("uq_zip_assignments_layer_id")),
-    )
-    op.create_index("idx_zip_assignments_parent_node_id", "zip_assignments", ["parent_node_id"], unique=False)
     op.create_table(
         "mvt_tile_cache",
         sa.Column("layer_id", sa.Integer(), nullable=False),
@@ -274,23 +177,81 @@ def upgrade() -> None:
             ")"
         )
     )
+    op.create_geospatial_table(
+        "nodes",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("layer_id", sa.Integer(), nullable=False),
+        sa.Column("name", sa.String(), nullable=False),
+        sa.Column("color", sa.String(), nullable=False),
+        sa.Column("data", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "geom_z3",
+            Geometry(srid=4326, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
+            nullable=True,
+        ),
+        sa.Column(
+            "geom_z7",
+            Geometry(srid=4326, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
+            nullable=True,
+        ),
+        sa.Column(
+            "geom_z11",
+            Geometry(srid=4326, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
+            nullable=True,
+        ),
+        sa.Column("parent_node_id", sa.Integer(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.ForeignKeyConstraint(["layer_id"], ["layers.id"], name=op.f("fk_nodes_layer_id_layers")),
+        sa.ForeignKeyConstraint(["parent_node_id"], ["nodes.id"], name=op.f("fk_nodes_parent_node_id_nodes")),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_nodes")),
+        sa.UniqueConstraint("layer_id", "name", name=op.f("uq_nodes_layer_id")),
+    )
+    op.create_geospatial_index(
+        "idx_nodes_geom_z11", "nodes", ["geom_z11"], unique=False, postgresql_using="gist", postgresql_ops={}
+    )
+    op.create_geospatial_index(
+        "idx_nodes_geom_z3", "nodes", ["geom_z3"], unique=False, postgresql_using="gist", postgresql_ops={}
+    )
+    op.create_geospatial_index(
+        "idx_nodes_geom_z7", "nodes", ["geom_z7"], unique=False, postgresql_using="gist", postgresql_ops={}
+    )
+    op.create_index("idx_nodes_layer_id", "nodes", ["layer_id"], unique=False)
+    op.create_index("idx_nodes_parent_node_id", "nodes", ["parent_node_id"], unique=False)
+    op.create_table(
+        "zip_assignments",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("layer_id", sa.Integer(), nullable=False),
+        sa.Column("zip_code", sa.String(length=5), nullable=False),
+        sa.Column("parent_node_id", sa.Integer(), nullable=True),
+        sa.Column("color", sa.String(), nullable=False),
+        sa.Column("data", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.ForeignKeyConstraint(["layer_id"], ["layers.id"], name=op.f("fk_zip_assignments_layer_id_layers")),
+        sa.ForeignKeyConstraint(["parent_node_id"], ["nodes.id"], name=op.f("fk_zip_assignments_parent_node_id_nodes")),
+        sa.ForeignKeyConstraint(
+            ["zip_code"], ["geography_zip_codes.zip_code"], name=op.f("fk_zip_assignments_zip_code_geography_zip_codes")
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_zip_assignments")),
+        sa.UniqueConstraint("layer_id", "zip_code", name=op.f("uq_zip_assignments_layer_id")),
+    )
+    op.create_index("idx_zip_assignments_parent_node_id", "zip_assignments", ["parent_node_id"], unique=False)
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     """Downgrade revisions: dc2613846b7f to faabb954ac33."""
     # ### commands auto generated by Alembic - please adjust! ###
-    op.drop_table("mvt_tile_cache")
     op.drop_index("idx_zip_assignments_parent_node_id", table_name="zip_assignments")
     op.drop_table("zip_assignments")
     op.drop_index("idx_nodes_parent_node_id", table_name="nodes")
     op.drop_index("idx_nodes_layer_id", table_name="nodes")
     op.drop_geospatial_index("idx_nodes_geom_z7", table_name="nodes", postgresql_using="gist", column_name="geom_z7")
     op.drop_geospatial_index("idx_nodes_geom_z3", table_name="nodes", postgresql_using="gist", column_name="geom_z3")
-    op.drop_geospatial_index("idx_nodes_geom_z15", table_name="nodes", postgresql_using="gist", column_name="geom_z15")
     op.drop_geospatial_index("idx_nodes_geom_z11", table_name="nodes", postgresql_using="gist", column_name="geom_z11")
-    op.drop_geospatial_index("idx_nodes_geom", table_name="nodes", postgresql_using="gist", column_name="geom")
     op.drop_geospatial_table("nodes")
+    op.drop_table("mvt_tile_cache")
     op.drop_index("uq_map_owner", table_name="user_map_roles", postgresql_where=sa.text("role = 'OWNER'"))
     op.drop_table("user_map_roles")
     op.drop_index("idx_map_jobs_map_id", table_name="map_jobs")
@@ -310,12 +271,6 @@ def downgrade() -> None:
         table_name="geography_zip_codes",
         postgresql_using="gist",
         column_name="geom_z3",
-    )
-    op.drop_geospatial_index(
-        "idx_geography_zip_codes_geom_z15",
-        table_name="geography_zip_codes",
-        postgresql_using="gist",
-        column_name="geom_z15",
     )
     op.drop_geospatial_index(
         "idx_geography_zip_codes_geom_z11",

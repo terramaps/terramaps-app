@@ -43,10 +43,6 @@ class BulkInsertNode(TypedDict):
     parent_node_id: int | None
     color: str
     data: Any | None
-    data_cache_key: str
-    data_inputs_cache_key: str
-    geom_cache_key: str
-    geom_inputs_cache_key: str
 
 
 class BulkInsertZipAssignment(TypedDict):
@@ -57,8 +53,6 @@ class BulkInsertZipAssignment(TypedDict):
     parent_node_id: int | None
     color: str
     data: Any | None
-    data_cache_key: str
-    data_inputs_cache_key: str
 
 
 def _load_active_job(db: DatabaseSession, map_id: str) -> MapJob | None:
@@ -214,8 +208,6 @@ def create_map(
                     parent_node_id=int(p) if pd.notna(p) else None,
                     color=geography_colors.get(str(z), "#CCCCCC"),
                     data=None,
-                    data_cache_key="",
-                    data_inputs_cache_key="",
                 )
                 for z, p in zip(zip_codes, parent_ids)
             ]
@@ -232,10 +224,6 @@ def create_map(
                     parent_node_id=int(p) if pd.notna(p) else None,
                     color=_TERRITORY_PALETTE[int(hashlib.md5(str(name).encode()).hexdigest(), 16) % len(_TERRITORY_PALETTE)],
                     data=None,
-                    data_cache_key="",
-                    data_inputs_cache_key="",
-                    geom_cache_key="",
-                    geom_inputs_cache_key="",
                 )
                 for name, p in zip(names, parent_ids)
             ]

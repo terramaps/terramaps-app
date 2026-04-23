@@ -15,7 +15,7 @@ class MapJobModel(Base, TimestampMixin):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     map_id: Mapped[str] = mapped_column(ForeignKey("maps.id"))
-    job_type: Mapped[Literal["import", "recompute_geometry", "recompute_data"]]
+    job_type: Mapped[Literal["import"]]
     status: Mapped[Literal["pending", "processing", "complete", "failed"]]
     step: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     error: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)

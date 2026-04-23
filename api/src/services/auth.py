@@ -2,13 +2,13 @@
 
 import logging
 from datetime import UTC, datetime, timedelta
-from sqlite3 import IntegrityError
 from typing import Annotated, Literal, NotRequired, TypedDict
 
 import jwt
 from fastapi import Depends, HTTPException, Request, status
 from passlib.hash import bcrypt
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from src.app.config import app_settings
 from src.app.database import DatabaseSession
@@ -94,8 +94,6 @@ class AuthService(BaseService):
 
     def _get_password_hash(self, password: str) -> str:
         """Hash a password."""
-        logger.error(password)
-        logger.error(len(password))
         return bcrypt.hash(password)
 
     def _verify_password(self, plain_password: str, hashed_password: str) -> bool:

@@ -645,7 +645,7 @@
           "Graph"
         ],
         "summary": "Bulk Update Node",
-        "description": "Bulk update nodes.",
+        "description": "Bulk update nodes (name/color only \u2014 does not change parent assignment).",
         "operationId": "bulk_update_node_nodes_bulk_put",
         "requestBody": {
           "content": {
@@ -693,7 +693,7 @@
           "Graph"
         ],
         "summary": "Bulk Delete Nodes",
-        "description": "Bulk delete nodes, orphaning or reparenting their children first.\n\nchild_action='orphan'   \u2192 children lose their parent assignment.\nchild_action='reparent' \u2192 children are moved to reparent_node_id (same layer).\nOnly valid for order>=1 layers. Use PUT /zip-assignments/{layer_id}/bulk to\nunassign zip codes instead.",
+        "description": "Bulk delete nodes, orphaning or reparenting their children first.\n\nchild_action='orphan'   \u2192 children lose their parent assignment.\nchild_action='reparent' \u2192 children are moved to reparent_node_id (same layer).\nOnly valid for order>=1 layers.",
         "operationId": "bulk_delete_nodes_nodes_bulk_delete",
         "requestBody": {
           "content": {
@@ -895,7 +895,7 @@
           "Graph"
         ],
         "summary": "Query Zip Assignments",
-        "description": "Query zip codes, joining against zip_assignments for the given layer.\n\nZips without an assignment row are returned with implicit defaults\n(color=#FFFFFF, parent_node_id=null) \u2014 same contract as the single-zip\n/geography endpoint. layer_id is always required; zip_codes narrows to a\nspecific set (e.g. a lasso selection); search filters by zip code substring.\nResults are ordered by zip code.",
+        "description": "Query zip codes, joining against zip_assignments for the given layer.",
         "operationId": "query_zip_assignments_zip_assignments_query_post",
         "parameters": [
           {
@@ -959,7 +959,7 @@
           "Graph"
         ],
         "summary": "Bulk Assign Zips",
-        "description": "Bulk assign or unassign zip codes to a territory.\n\nPrimary operation after lasso selection. Passing parent_node_id=null\nunassigns all provided zip codes (preserves rows and colors).\nEnqueues a geometry recompute for the affected territories after commit.",
+        "description": "Bulk assign or unassign zip codes to a territory.\n\nPrimary operation after lasso selection. Passing parent_node_id=null\nunassigns all provided zip codes (preserves rows and colors).",
         "operationId": "bulk_assign_zips_zip_assignments__layer_id__bulk_put",
         "parameters": [
           {
@@ -1169,7 +1169,7 @@
           "Graph"
         ],
         "summary": "Get Zip With Geography Default",
-        "description": "Get a zip's assignment state, falling back to geography defaults if no row exists.\n\nUnlike GET /zip-assignments/{layer_id}/{zip_code}, this never returns 404 for\nknown zip codes \u2014 it returns the implicit white/unassigned state.",
+        "description": "Get a zip's assignment state, falling back to geography defaults if no row exists.",
         "operationId": "get_zip_with_geography_default_zip_assignments__layer_id___zip_code__geography_get",
         "parameters": [
           {
@@ -1221,7 +1221,7 @@
           "Graph"
         ],
         "summary": "Search Map",
-        "description": "Search nodes and zip codes within a map by name / zip code prefix.\n\nResults are ordered alphabetically and capped at `limit`. Pass `layer_id`\nto restrict the search to a single layer; omit to search all layers.\nZip codes are matched by prefix (e.g. \"902\" \u2192 \"90210\"). Node names are\nmatched as a substring (case-insensitive).",
+        "description": "Search nodes and zip codes within a map by name / zip code prefix.",
         "operationId": "search_map_search_get",
         "parameters": [
           {

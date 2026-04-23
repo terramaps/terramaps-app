@@ -64,13 +64,6 @@ class NodeModel(Base, TimestampMixin):
         nullable=True,
         deferred=True,
     )
-    data_cache_key: Mapped[str]
-    data_inputs_cache_key: Mapped[str]
-    geom: Mapped[WKBElement | None] = mapped_column(
-        Geometry(srid=4326),
-        nullable=True,
-        deferred=True,
-    )
     geom_z3: Mapped[WKBElement | None] = mapped_column(
         Geometry(srid=4326),
         nullable=True,
@@ -86,14 +79,6 @@ class NodeModel(Base, TimestampMixin):
         nullable=True,
         deferred=True,
     )
-    geom_z15: Mapped[WKBElement | None] = mapped_column(
-        Geometry(srid=4326),
-        nullable=True,
-        deferred=True,
-    )
-    geom_cache_key: Mapped[str]
-    geom_inputs_cache_key: Mapped[str]
-
     parent_node_id: Mapped[int | None] = mapped_column(ForeignKey("nodes.id"), nullable=True)
 
     @classmethod
@@ -146,8 +131,6 @@ class ZipAssignmentModel(Base, TimestampMixin):
         nullable=True,
         deferred=True,
     )
-    data_cache_key: Mapped[str]
-    data_inputs_cache_key: Mapped[str]
 
     @declared_attr.directive
     def __table_args__(cls):

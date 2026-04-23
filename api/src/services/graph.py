@@ -36,8 +36,9 @@ class GraphService(BaseService):
     def create_layer(self, layer_data: CreateLayer) -> LayerModel:
         """Create layer."""
         child_layer = (
-            self.db
-            .execute(select(LayerModel).where(LayerModel.map_id == layer_data.map_id).order_by(LayerModel.order.desc()))
+            self.db.execute(
+                select(LayerModel).where(LayerModel.map_id == layer_data.map_id).order_by(LayerModel.order.desc())
+            )
             .scalars()
             .first()
         )
@@ -83,10 +84,6 @@ class GraphService(BaseService):
             parent_node_id=node_data.parent_node_id,
             geom=None,
             data=None,
-            data_cache_key="",
-            data_inputs_cache_key="",
-            geom_cache_key="",
-            geom_inputs_cache_key="",
         )
         self.db.add(new_node)
         self.db.flush()
@@ -196,11 +193,10 @@ class GraphService(BaseService):
             layer_id=layer.id,
             color="#CCCCCC",
             parent_node_id=data.parent_node_id,
+            geom_z3=None,
+            geom_z7=None,
+            geom_z11=None,
             data=None,
-            data_cache_key="",
-            data_inputs_cache_key="",
-            geom_cache_key="",
-            geom_inputs_cache_key="",
         )
         self.db.add(new_node)
         self.db.flush()  # obtain new_node.id before reparenting
@@ -319,8 +315,6 @@ class GraphService(BaseService):
             zip_code=zip_code,
             parent_node_id=data.parent_node_id,
             color=data.color if data.color is not None else geography.color,
-            data_cache_key="",
-            data_inputs_cache_key="",
         )
         self.db.add(new_assignment)
         self.db.flush()
@@ -375,14 +369,12 @@ class GraphService(BaseService):
         # None it becomes SQL NULL and COALESCE falls through to the next expression.
         upsert_sql = text("""
             INSERT INTO zip_assignments
-                (layer_id, zip_code, parent_node_id, color, data_cache_key, data_inputs_cache_key)
+                (layer_id, zip_code, parent_node_id, color)
             SELECT
                 :layer_id,
                 gz.zip_code,
                 :parent_node_id,
-                COALESCE(:color_override, gz.color),
-                '',
-                ''
+                COALESCE(:color_override, gz.color)
             FROM geography_zip_codes gz
             WHERE gz.zip_code = ANY(:zip_codes)
             ON CONFLICT (layer_id, zip_code) DO UPDATE
@@ -442,8 +434,7 @@ class GraphService(BaseService):
         """
         try:
             _, parent_layer = (
-                self.db
-                .execute(
+                self.db.execute(
                     select(NodeModel, LayerModel)
                     .join(target=LayerModel, onclause=LayerModel.id == NodeModel.layer_id)
                     .filter(NodeModel.id == proposed_parent_node_id)

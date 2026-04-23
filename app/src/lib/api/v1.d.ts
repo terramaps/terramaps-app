@@ -313,7 +313,7 @@ export interface paths {
         get?: never;
         /**
          * Bulk Update Node
-         * @description Bulk update nodes.
+         * @description Bulk update nodes (name/color only — does not change parent assignment).
          */
         put: operations["bulk_update_node_nodes_bulk_put"];
         post?: never;
@@ -323,8 +323,7 @@ export interface paths {
          *
          *     child_action='orphan'   → children lose their parent assignment.
          *     child_action='reparent' → children are moved to reparent_node_id (same layer).
-         *     Only valid for order>=1 layers. Use PUT /zip-assignments/{layer_id}/bulk to
-         *     unassign zip codes instead.
+         *     Only valid for order>=1 layers.
          */
         delete: operations["bulk_delete_nodes_nodes_bulk_delete"];
         options?: never;
@@ -410,12 +409,6 @@ export interface paths {
         /**
          * Query Zip Assignments
          * @description Query zip codes, joining against zip_assignments for the given layer.
-         *
-         *     Zips without an assignment row are returned with implicit defaults
-         *     (color=#FFFFFF, parent_node_id=null) — same contract as the single-zip
-         *     /geography endpoint. layer_id is always required; zip_codes narrows to a
-         *     specific set (e.g. a lasso selection); search filters by zip code substring.
-         *     Results are ordered by zip code.
          */
         post: operations["query_zip_assignments_zip_assignments_query_post"];
         delete?: never;
@@ -438,7 +431,6 @@ export interface paths {
          *
          *     Primary operation after lasso selection. Passing parent_node_id=null
          *     unassigns all provided zip codes (preserves rows and colors).
-         *     Enqueues a geometry recompute for the affected territories after commit.
          */
         put: operations["bulk_assign_zips_zip_assignments__layer_id__bulk_put"];
         post?: never;
@@ -490,9 +482,6 @@ export interface paths {
         /**
          * Get Zip With Geography Default
          * @description Get a zip's assignment state, falling back to geography defaults if no row exists.
-         *
-         *     Unlike GET /zip-assignments/{layer_id}/{zip_code}, this never returns 404 for
-         *     known zip codes — it returns the implicit white/unassigned state.
          */
         get: operations["get_zip_with_geography_default_zip_assignments__layer_id___zip_code__geography_get"];
         put?: never;
@@ -513,11 +502,6 @@ export interface paths {
         /**
          * Search Map
          * @description Search nodes and zip codes within a map by name / zip code prefix.
-         *
-         *     Results are ordered alphabetically and capped at `limit`. Pass `layer_id`
-         *     to restrict the search to a single layer; omit to search all layers.
-         *     Zip codes are matched by prefix (e.g. "902" → "90210"). Node names are
-         *     matched as a substring (case-insensitive).
          */
         get: operations["search_map_search_get"];
         put?: never;

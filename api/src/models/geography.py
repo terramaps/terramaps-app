@@ -32,7 +32,3 @@ class ZipCodeGeography(Base, TimestampMixin):
         Geometry(srid=4326),
         nullable=True,
     )
-    geom_z15: Mapped[WKBElement | None] = mapped_column(
-        Geometry(srid=4326),
-        nullable=True,
-    )

@@ -31,8 +31,8 @@ def select_features_in_lasso(selection: SpatialSelectRequest, db: DatabaseSessio
                     COUNT(*) AS count,
                     ARRAY_AGG(gz.zip_code ORDER BY gz.zip_code) AS zip_codes
                 FROM geography_zip_codes gz
-                WHERE gz.geom IS NOT NULL
-                  AND ST_Intersects(gz.geom, ST_GeomFromGeoJSON(:polygon))
+                WHERE gz.geom_z11 IS NOT NULL
+                  AND ST_Intersects(gz.geom_z11, ST_GeomFromGeoJSON(:polygon))
             """),
             {"polygon": polygon_geojson},
         ).one()
@@ -48,9 +48,9 @@ def select_features_in_lasso(selection: SpatialSelectRequest, db: DatabaseSessio
                 func.array_agg(NodeModel.id).label("ids"),
             ).where(
                 NodeModel.layer_id == selection.layer_id,
-                NodeModel.geom.isnot(None),
+                NodeModel.geom_z11.isnot(None),
                 func.ST_Intersects(
-                    NodeModel.geom,
+                    NodeModel.geom_z11,
                     func.ST_GeomFromGeoJSON(polygon_geojson),
                 ),
             )

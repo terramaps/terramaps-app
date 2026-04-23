@@ -14,7 +14,6 @@ class UserModel(Base, TimestampMixin):
     id: Mapped[intpk] = mapped_column(init=False)
     email: Mapped[str] = mapped_column(CITEXT, unique=True, nullable=False)
 
-    # TODO replace with permissions and real password
     password: Mapped[str]
 
     name: Mapped[str | None] = mapped_column(default=None)

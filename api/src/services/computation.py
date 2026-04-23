@@ -1,16 +1,13 @@
 """Computation service for graph geometry roll-ups."""
 
 import logging
-import time
 from typing import Annotated
 
 from fastapi import Depends
-from sqlalchemy import bindparam, text
-from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy.dialects.postgresql import JSONB as PgJSONB
+from sqlalchemy import select, text
 
 from src.app.database import DatabaseSession
-from src.models.graph import LayerModel
+from src.models.graph import LayerModel, MapModel, NodeModel
 from src.services.base import BaseService
 
 logger = logging.getLogger(__name__)
@@ -19,289 +16,250 @@ logger = logging.getLogger(__name__)
 class ComputationService(BaseService):
     """Compute derived geometry and data for graph nodes."""
 
-    def bulk_recompute_layer(self, layer_id: int, force: bool = False) -> dict[str, object]:
-        """Bulk recompute geometries for all parent nodes in a layer.
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
-        For order=1 layers, children are zip_assignments joined to geography_zip_codes.
-        For order>1 layers, children are nodes (standard recursive union).
+    def recompute_from(self, map_id: str, affected_node_ids: set[int]) -> None:
+        """Recompute geometry (and data, if configured) for affected nodes and all ancestors.
 
-        Signature hashing detects which parents need recompute unless force=True.
-        Returns timing metrics and counts.
+        Propagates upward layer by layer until no parents remain.
+        Call this synchronously inside the request handler before db.commit().
         """
-        layer = self.db.get(LayerModel, layer_id)
-        if layer is None:
-            return {"layer_id": layer_id, "error": "Layer not found"}
-
-        start = time.perf_counter()
-
-        if layer.order == 1:
-            # Union pre-simplified zip geometries directly from geography_zip_codes.
-            # Each zoom level unions the already-simplified column (gz.geom_zN) rather than
-            # simplifying the full-res union result — avoids per-parent Transform+SnapToGrid+MakeValid.
-            # geom_cache_key uses md5(signature) instead of md5(ST_AsEWKB(geom)) since the union
-            # is deterministic: same zip set → identical geometry.
-            combined_sql = text("""
-                WITH child_groups AS (
-                  SELECT za.parent_node_id AS pid,
-                         STRING_AGG(za.zip_code, ';' ORDER BY za.zip_code) AS signature,
-                         COUNT(*) AS child_count
-                  FROM zip_assignments za
-                  JOIN nodes p ON p.id = za.parent_node_id
-                  WHERE p.layer_id = :layer_id
-                    AND za.parent_node_id IS NOT NULL
-                  GROUP BY za.parent_node_id
-                ), candidates AS (
-                  SELECT cg.pid,
-                         md5(cg.signature) AS inputs_hash,
-                         p.geom_inputs_cache_key AS existing_hash,
-                         cg.child_count
-                  FROM child_groups cg
-                  JOIN nodes p ON p.id = cg.pid
-                ), changed AS (
-                  SELECT pid, inputs_hash, child_count
-                  FROM candidates
-                  WHERE :force
-                     OR existing_hash IS DISTINCT FROM inputs_hash
-                     OR existing_hash IS NULL
-                ), calc AS (
-                  SELECT ch.pid,
-                         ch.inputs_hash AS signature_hash,
-                         ST_UnaryUnion(ST_Collect(gz.geom))     AS union_geom,
-                         ST_UnaryUnion(ST_Collect(gz.geom_z3))  AS union_z3,
-                         ST_UnaryUnion(ST_Collect(gz.geom_z7))  AS union_z7,
-                         ST_UnaryUnion(ST_Collect(gz.geom_z11)) AS union_z11
-                  FROM changed ch
-                  JOIN zip_assignments za ON za.parent_node_id = ch.pid
-                  JOIN geography_zip_codes gz ON gz.zip_code = za.zip_code
-                  GROUP BY ch.pid, ch.inputs_hash
-                ), upd AS (
-                  UPDATE nodes p
-                  SET geom                  = calc.union_geom,
-                      geom_z3               = calc.union_z3,
-                      geom_z7               = calc.union_z7,
-                      geom_z11              = calc.union_z11,
-                      geom_inputs_cache_key = calc.signature_hash,
-                      geom_cache_key        = calc.signature_hash
-                  FROM calc
-                  WHERE p.id = calc.pid
-                  RETURNING p.id
-                )
-                SELECT
-                  (SELECT COUNT(*) FROM candidates) AS parents_considered,
-                  (SELECT COUNT(*) FROM upd)        AS updated_count;
-            """)
-        else:
-            # Children are nodes; signature is node IDs + their geom_cache_keys.
-            # order>1 nodes don't have pre-simplified zip columns to draw from, so we simplify
-            # the union result. geom_cache_key still uses md5(signature) for the same reason.
-            combined_sql = text("""
-                WITH child_groups AS (
-                  SELECT c.parent_node_id AS pid,
-                         STRING_AGG(c.id::text || ':' || COALESCE(c.geom_cache_key,'null'), ';' ORDER BY c.id) AS signature,
-                         COUNT(*) AS child_count
-                  FROM nodes c
-                  JOIN nodes p ON p.id = c.parent_node_id
-                  WHERE p.layer_id = :layer_id
-                  GROUP BY c.parent_node_id
-                ), candidates AS (
-                  SELECT cg.pid,
-                         md5(cg.signature) AS inputs_hash,
-                         p.geom_inputs_cache_key AS existing_hash,
-                         cg.child_count
-                  FROM child_groups cg
-                  JOIN nodes p ON p.id = cg.pid
-                ), changed AS (
-                  SELECT pid, inputs_hash, child_count
-                  FROM candidates
-                  WHERE :force
-                     OR existing_hash IS DISTINCT FROM inputs_hash
-                     OR existing_hash IS NULL
-                ), calc AS (
-                  SELECT ch.pid,
-                         ch.inputs_hash AS signature_hash,
-                         ST_UnaryUnion(ST_Collect(n.geom)) AS union_geom
-                  FROM changed ch
-                  JOIN nodes n ON n.parent_node_id = ch.pid AND n.geom IS NOT NULL
-                  GROUP BY ch.pid, ch.inputs_hash
-                ), upd AS (
-                  UPDATE nodes p
-                  SET geom                  = calc.union_geom,
-                      geom_z3               = CASE WHEN ST_IsEmpty(ST_MakeValid(ST_SnapToGrid(ST_Transform(calc.union_geom, 3857), 19568.0))) THEN NULL ELSE ST_Transform(ST_MakeValid(ST_SnapToGrid(ST_Transform(calc.union_geom, 3857), 19568.0)), 4326) END,
-                      geom_z7               = CASE WHEN ST_IsEmpty(ST_MakeValid(ST_SnapToGrid(ST_Transform(calc.union_geom, 3857),  1223.0))) THEN NULL ELSE ST_Transform(ST_MakeValid(ST_SnapToGrid(ST_Transform(calc.union_geom, 3857),  1223.0)), 4326) END,
-                      geom_z11              = CASE WHEN ST_IsEmpty(ST_MakeValid(ST_SnapToGrid(ST_Transform(calc.union_geom, 3857),    76.0))) THEN NULL ELSE ST_Transform(ST_MakeValid(ST_SnapToGrid(ST_Transform(calc.union_geom, 3857),    76.0)), 4326) END,
-                      geom_z15              = CASE WHEN ST_IsEmpty(ST_MakeValid(ST_SnapToGrid(ST_Transform(calc.union_geom, 3857),     4.8))) THEN NULL ELSE ST_Transform(ST_MakeValid(ST_SnapToGrid(ST_Transform(calc.union_geom, 3857),     4.8)), 4326) END,
-                      geom_inputs_cache_key = calc.signature_hash,
-                      geom_cache_key        = calc.signature_hash
-                  FROM calc
-                  WHERE p.id = calc.pid
-                    AND calc.union_geom IS NOT NULL
-                  RETURNING p.id
-                )
-                SELECT
-                  (SELECT COUNT(*) FROM candidates) AS parents_considered,
-                  (SELECT COUNT(*) FROM upd)        AS updated_count;
-            """)
-
-        row = self.db.execute(combined_sql, {"layer_id": layer_id, "force": force}).mappings().one()
-        parents_considered = int(row["parents_considered"])
-        updated_count = int(row["updated_count"])
-
-        if updated_count:
-            self.db.flush()
-
-        total_ms = (time.perf_counter() - start) * 1000.0
-        avg_per_parent = total_ms / updated_count if updated_count else 0.0
-
-        return {
-            "layer_id": layer_id,
-            "parents_considered": parents_considered,
-            "parents_recomputed": updated_count,
-            "timing_ms": {
-                "total": round(total_ms, 2),
-                "avg_per_parent": round(avg_per_parent, 2),
-            },
-            "notes": {"force": force},
-        }
-
-    def bulk_recompute_data_layer(
-        self,
-        layer_id: int,
-        data_field_config: list[dict[str, object]],
-        force: bool = False,
-    ) -> dict[str, object]:
-        """Bulk recompute aggregated data for all parent nodes in a layer.
-
-        For order=1 layers, leaf data is read from zip_assignments.
-        For order>1 layers, leaf data is read from child nodes.
-
-        Uses cache-key diffing to skip unchanged parents unless force=True.
-        """
-        numeric_fields: list[dict[str, object]] = [
-            f for f in data_field_config if f.get("type") == "number" and f.get("aggregations")
-        ]
-        if not numeric_fields:
-            return {"layer_id": layer_id, "parents_recomputed": 0, "notes": {"message": "No numeric fields"}}
-
-        layer = self.db.get(LayerModel, layer_id)
-        if layer is None:
-            return {"layer_id": layer_id, "error": "Layer not found"}
-
-        start = time.perf_counter()
-
-        if layer.order == 1:
-            agg_expr = self._build_agg_expr(numeric_fields, child_alias="za")
-            grouping_sql = text(
-                f"""
-                WITH child_groups AS (
-                  SELECT za.parent_node_id AS pid,
-                         STRING_AGG(za.zip_code || ':' || COALESCE(za.data_cache_key,'null'), ';' ORDER BY za.zip_code) AS signature,
-                         {agg_expr} AS agg_data
-                  FROM zip_assignments za
-                  JOIN nodes p ON p.id = za.parent_node_id
-                  WHERE p.layer_id = :layer_id
-                    AND za.parent_node_id IS NOT NULL
-                    AND za.data IS NOT NULL
-                  GROUP BY za.parent_node_id
-                )
-                SELECT cg.pid,
-                       md5(cg.signature) AS inputs_hash,
-                       p.data_inputs_cache_key AS existing_hash,
-                       cg.agg_data
-                FROM child_groups cg
-                JOIN nodes p ON p.id = cg.pid
-                """  # noqa: S608
-            )
-        else:
-            agg_expr = self._build_agg_expr(numeric_fields, child_alias="c")
-            grouping_sql = text(
-                f"""
-                WITH child_groups AS (
-                  SELECT c.parent_node_id AS pid,
-                         STRING_AGG(c.id::text || ':' || COALESCE(c.data_cache_key,'null'), ';' ORDER BY c.id) AS signature,
-                         {agg_expr} AS agg_data
-                  FROM nodes c
-                  JOIN nodes p ON p.id = c.parent_node_id
-                  WHERE p.layer_id = :layer_id
-                    AND c.data IS NOT NULL
-                  GROUP BY c.parent_node_id
-                )
-                SELECT cg.pid,
-                       md5(cg.signature) AS inputs_hash,
-                       p.data_inputs_cache_key AS existing_hash,
-                       cg.agg_data
-                FROM child_groups cg
-                JOIN nodes p ON p.id = cg.pid
-                """  # noqa: S608
-            )
-
-        rows = self.db.execute(grouping_sql, {"layer_id": layer_id}).mappings().all()
-        grouping_ms = (time.perf_counter() - start) * 1000.0
-
-        if force:
-            to_update = [(r["pid"], r["inputs_hash"], r["agg_data"]) for r in rows]
-        else:
-            to_update = [
-                (r["pid"], r["inputs_hash"], r["agg_data"])
-                for r in rows
-                if r["existing_hash"] != r["inputs_hash"] or r["existing_hash"] is None
-            ]
-
-        if not to_update:
-            total_ms = (time.perf_counter() - start) * 1000.0
-            return {
-                "layer_id": layer_id,
-                "parents_considered": len(rows),
-                "parents_recomputed": 0,
-                "timing_ms": {"total": round(total_ms, 2)},
-                "notes": {"message": "No parents needed recompute", "force": force},
-            }
-
-        update_start = time.perf_counter()
-        update_sql = text(
-            """
-            UPDATE nodes
-            SET data = vals.agg_data,
-                data_inputs_cache_key = vals.inputs_hash,
-                data_cache_key = md5(vals.agg_data::text)
-            FROM (SELECT unnest(:pids) AS pid,
-                         unnest(:hashes) AS inputs_hash,
-                         unnest(:agg_datas) AS agg_data) AS vals
-            WHERE nodes.id = vals.pid
-            """
-        ).bindparams(bindparam("agg_datas", type_=ARRAY(PgJSONB())))
-
-        self.db.execute(
-            update_sql,
-            {
-                "pids": [r[0] for r in to_update],
-                "hashes": [r[1] for r in to_update],
-                "agg_datas": [r[2] for r in to_update],
-            },
+        map_model = self.db.get(MapModel, map_id)
+        data_field_config: list[dict[str, object]] = (
+            list(map_model.data_field_config) if map_model and map_model.data_field_config else []
         )
+
+        current_ids = set(affected_node_ids)
+        while current_ids:
+            order_groups = self._get_layer_order_groups(current_ids)
+            for order, ids in sorted(order_groups.items()):
+                if order == 1:
+                    self._recompute_zip_layer(ids)
+                    if data_field_config:
+                        self._recompute_data_zip_layer(ids, data_field_config)
+                else:
+                    self._recompute_node_layer(ids)
+                    if data_field_config:
+                        self._recompute_data_node_layer(ids, data_field_config)
+            current_ids = self._get_parent_ids(current_ids)
+
+    def recompute_all_layers(self, map_id: str) -> list[LayerModel]:
+        """Full geometry recompute for every order>=1 layer in a map, bottom to top.
+
+        Used by the import task where every node needs computing from scratch.
+        Returns the layer list so callers can pass it to recompute_all_data_layers.
+        """
+        layers = list(
+            self.db.execute(
+                select(LayerModel)
+                .where(LayerModel.map_id == map_id, LayerModel.order >= 1)
+                .order_by(LayerModel.order.asc())
+            )
+            .scalars()
+            .all()
+        )
+        for layer in layers:
+            node_ids = set(self.db.execute(select(NodeModel.id).where(NodeModel.layer_id == layer.id)).scalars().all())
+            if node_ids:
+                if layer.order == 1:
+                    self._recompute_zip_layer(node_ids)
+                else:
+                    self._recompute_node_layer(node_ids)
+        return layers
+
+    def recompute_all_data_layers(
+        self,
+        map_id: str,
+        data_field_config: list[dict[str, object]],
+        layers: list[LayerModel] | None = None,
+    ) -> None:
+        """Full data recompute for every order>=1 layer in a map, bottom to top.
+
+        Pass `layers` from recompute_all_layers to avoid an extra query.
+        """
+        numeric_fields = [f for f in data_field_config if f.get("type") == "number" and f.get("aggregations")]
+        if not numeric_fields:
+            return
+
+        if layers is None:
+            layers = list(
+                self.db.execute(
+                    select(LayerModel)
+                    .where(LayerModel.map_id == map_id, LayerModel.order >= 1)
+                    .order_by(LayerModel.order.asc())
+                )
+                .scalars()
+                .all()
+            )
+        for layer in layers:
+            node_ids = set(self.db.execute(select(NodeModel.id).where(NodeModel.layer_id == layer.id)).scalars().all())
+            if node_ids:
+                if layer.order == 1:
+                    self._recompute_data_zip_layer(node_ids, data_field_config)
+                else:
+                    self._recompute_data_node_layer(node_ids, data_field_config)
+
+    # ------------------------------------------------------------------
+    # Geometry recompute helpers
+    # ------------------------------------------------------------------
+
+    def _recompute_zip_layer(self, node_ids: set[int]) -> None:
+        """Recompute geometry for order=1 nodes from their zip assignments.
+
+        Uses a LEFT JOIN so nodes with no zips get their geometry set to NULL.
+        """
+        sql = text("""
+            WITH zip_unions AS (
+                SELECT za.parent_node_id AS pid,
+                       ST_UnaryUnion(ST_Collect(gz.geom_z3))  AS g3,
+                       ST_UnaryUnion(ST_Collect(gz.geom_z7))  AS g7,
+                       ST_UnaryUnion(ST_Collect(gz.geom_z11)) AS g11
+                FROM zip_assignments za
+                JOIN geography_zip_codes gz ON gz.zip_code = za.zip_code
+                WHERE za.parent_node_id = ANY(:node_ids)
+                GROUP BY za.parent_node_id
+            ), affected AS (
+                SELECT id FROM nodes WHERE id = ANY(:node_ids)
+            )
+            UPDATE nodes p
+            SET geom_z3  = zu.g3,
+                geom_z7  = zu.g7,
+                geom_z11 = zu.g11
+            FROM affected a
+            LEFT JOIN zip_unions zu ON zu.pid = a.id
+            WHERE p.id = a.id
+        """)
+        self.db.execute(sql, {"node_ids": list(node_ids)})
         self.db.flush()
 
-        update_ms = (time.perf_counter() - update_start) * 1000.0
-        total_ms = (time.perf_counter() - start) * 1000.0
+    def _recompute_node_layer(self, node_ids: set[int]) -> None:
+        """Recompute geometry for order>1 nodes from their child node geometries.
 
-        return {
-            "layer_id": layer_id,
-            "parents_considered": len(rows),
-            "parents_recomputed": len(to_update),
-            "timing_ms": {
-                "grouping": round(grouping_ms, 2),
-                "update": round(update_ms, 2),
-                "total": round(total_ms, 2),
-            },
-            "notes": {"force": force},
-        }
+        Each zoom column on children is already pre-simplified at the correct level,
+        so we union them directly — no additional simplification math needed.
+        Uses a LEFT JOIN so nodes with no geometry-bearing children get NULL.
+        """
+        sql = text("""
+            WITH child_unions AS (
+                SELECT c.parent_node_id AS pid,
+                       ST_UnaryUnion(ST_Collect(c.geom_z3))  AS g3,
+                       ST_UnaryUnion(ST_Collect(c.geom_z7))  AS g7,
+                       ST_UnaryUnion(ST_Collect(c.geom_z11)) AS g11
+                FROM nodes c
+                WHERE c.parent_node_id = ANY(:node_ids)
+                GROUP BY c.parent_node_id
+            ), affected AS (
+                SELECT id FROM nodes WHERE id = ANY(:node_ids)
+            )
+            UPDATE nodes p
+            SET geom_z3  = cu.g3,
+                geom_z7  = cu.g7,
+                geom_z11 = cu.g11
+            FROM affected a
+            LEFT JOIN child_unions cu ON cu.pid = a.id
+            WHERE p.id = a.id
+        """)
+        self.db.execute(sql, {"node_ids": list(node_ids)})
+        self.db.flush()
+
+    # ------------------------------------------------------------------
+    # Data recompute helpers
+    # ------------------------------------------------------------------
+
+    def _recompute_data_zip_layer(self, node_ids: set[int], data_field_config: list[dict[str, object]]) -> None:
+        """Recompute aggregated data for order=1 nodes from their zip assignments."""
+        numeric_fields = [f for f in data_field_config if f.get("type") == "number" and f.get("aggregations")]
+        if not numeric_fields:
+            return
+        agg_expr = self._build_agg_expr(numeric_fields, child_alias="za")
+        sql = text(
+            f"""
+            WITH agg AS (
+                SELECT za.parent_node_id AS pid,
+                       {agg_expr} AS agg_data
+                FROM zip_assignments za
+                WHERE za.parent_node_id = ANY(:node_ids)
+                  AND za.data IS NOT NULL
+                GROUP BY za.parent_node_id
+            ), affected AS (
+                SELECT id FROM nodes WHERE id = ANY(:node_ids)
+            )
+            UPDATE nodes p
+            SET data = agg.agg_data
+            FROM affected a
+            LEFT JOIN agg ON agg.pid = a.id
+            WHERE p.id = a.id
+            """  # noqa: S608
+        )
+        self.db.execute(sql, {"node_ids": list(node_ids)})
+        self.db.flush()
+
+    def _recompute_data_node_layer(self, node_ids: set[int], data_field_config: list[dict[str, object]]) -> None:
+        """Recompute aggregated data for order>1 nodes from their child nodes."""
+        numeric_fields = [f for f in data_field_config if f.get("type") == "number" and f.get("aggregations")]
+        if not numeric_fields:
+            return
+        agg_expr = self._build_agg_expr(numeric_fields, child_alias="c")
+        sql = text(
+            f"""
+            WITH agg AS (
+                SELECT c.parent_node_id AS pid,
+                       {agg_expr} AS agg_data
+                FROM nodes c
+                WHERE c.parent_node_id = ANY(:node_ids)
+                  AND c.data IS NOT NULL
+                GROUP BY c.parent_node_id
+            ), affected AS (
+                SELECT id FROM nodes WHERE id = ANY(:node_ids)
+            )
+            UPDATE nodes p
+            SET data = agg.agg_data
+            FROM affected a
+            LEFT JOIN agg ON agg.pid = a.id
+            WHERE p.id = a.id
+            """  # noqa: S608
+        )
+        self.db.execute(sql, {"node_ids": list(node_ids)})
+        self.db.flush()
+
+    # ------------------------------------------------------------------
+    # Propagation helpers
+    # ------------------------------------------------------------------
+
+    def _get_layer_order_groups(self, node_ids: set[int]) -> dict[int, set[int]]:
+        """Group node IDs by their layer's order value."""
+        rows = self.db.execute(
+            select(NodeModel.id, LayerModel.order)
+            .join(LayerModel, NodeModel.layer_id == LayerModel.id)
+            .where(NodeModel.id.in_(node_ids))
+        ).all()
+        groups: dict[int, set[int]] = {}
+        for node_id, order in rows:
+            groups.setdefault(order, set()).add(node_id)
+        return groups
+
+    def _get_parent_ids(self, node_ids: set[int]) -> set[int]:
+        """Return the non-null parent_node_ids of the given nodes."""
+        rows = (
+            self.db.execute(
+                select(NodeModel.parent_node_id).where(NodeModel.id.in_(node_ids), NodeModel.parent_node_id.isnot(None))
+            )
+            .scalars()
+            .all()
+        )
+        return set(rows)
+
+    # ------------------------------------------------------------------
+    # SQL builder
+    # ------------------------------------------------------------------
 
     @staticmethod
     def _build_agg_expr(numeric_fields: list[dict[str, object]], child_alias: str) -> str:
-        """Build a jsonb_build_object(...) expression aggregating data fields from child_alias.
+        """Build a jsonb_build_object(...) expression aggregating numeric data fields.
 
-        child_alias is the SQL alias of the child table (either 'c' for nodes or 'za' for
-        zip_assignments). Both tables store data as JSONB under the same suffixed keys
-        (e.g. 'customers_sum'), so the expression is identical except for the table alias.
+        child_alias is the SQL alias of the child table ('c' for nodes, 'za' for zip_assignments).
         """
         agg_parts: list[str] = []
         for field in numeric_fields:
