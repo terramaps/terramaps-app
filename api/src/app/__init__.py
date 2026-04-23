@@ -3,11 +3,8 @@
 This file is responsible for initializing the FastAPI object and setting up any configuration such as middlewares, logging config, etc.
 """
 
-from pathlib import Path
-
 from fastapi import FastAPI
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from src.app.analytics import configure_analytics
 from src.app.exceptions import configure_exceptions
@@ -21,10 +18,6 @@ app = FastAPI(title="Terramaps API", debug=app_settings.debug)
 
 # Trust the X-Forwarded-* headers from your proxies/load balancers
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
-
-# Mount static files
-static_dir = Path(__file__).parent.parent / "static"
-app.mount("/static", StaticFiles(directory=str(static_dir), html=True), name="static")
 
 # Additional configurations
 configure_cors(app=app)
