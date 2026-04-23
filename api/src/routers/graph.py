@@ -338,7 +338,7 @@ def update_node(
     if node_data.parent_node_id is not None and node_data.parent_node_id != old_parent_id:
         affected_ids.add(node_data.parent_node_id)
     if affected_ids:
-        computation.recompute_from(layer.map_id, affected_ids)
+        computation.recompute_from(affected_ids)
 
     _bump_tile_version(db, layer.map_id)
     db.commit()
@@ -386,7 +386,7 @@ def delete_node(
     db.execute(delete(NodeModel).where(NodeModel.id == node_id))
 
     if old_parent_id is not None:
-        computation.recompute_from(layer.map_id, {old_parent_id})
+        computation.recompute_from({old_parent_id})
 
     _bump_tile_version(db, layer.map_id)
     db.commit()
@@ -482,7 +482,7 @@ def bulk_reparent_nodes(
         affected_ids.add(data.parent_node_id)
 
     if affected_ids:
-        computation.recompute_from(map_id, affected_ids)
+        computation.recompute_from(affected_ids)
     _bump_tile_version(db, map_id)
     db.commit()
 
@@ -535,7 +535,7 @@ def merge_nodes(
         raise HTTPException(e.code if e.code in (400, 404) else 400, e.msg) from e
 
     # new_node has inherited all children — recompute it and propagate up.
-    computation.recompute_from(map_id, {new_node.id})
+    computation.recompute_from({new_node.id})
     _bump_tile_version(db, map_id)
     db.commit()
 
@@ -597,7 +597,7 @@ def bulk_delete_nodes(
         affected_ids.add(data.reparent_node_id)
 
     if affected_ids:
-        computation.recompute_from(map_id, affected_ids)
+        computation.recompute_from(affected_ids)
     _bump_tile_version(db, map_id)
     db.commit()
 
@@ -756,7 +756,7 @@ def bulk_assign_zips(
         affected_ids.add(data.parent_node_id)
 
     if affected_ids:
-        computation.recompute_from(layer.map_id, affected_ids)
+        computation.recompute_from(affected_ids)
     _bump_tile_version(db, layer.map_id)
     db.commit()
     return {"updated": count}
@@ -797,7 +797,7 @@ def assign_zip(
         affected_ids.add(data.parent_node_id)
 
     if affected_ids:
-        computation.recompute_from(layer.map_id, affected_ids)
+        computation.recompute_from(affected_ids)
     _bump_tile_version(db, layer.map_id)
     db.commit()
 
@@ -834,7 +834,7 @@ def reset_zip(
     graph_service.reset_zip(layer_id=layer_id, zip_code=padded)
 
     if old_parent_id is not None:
-        computation.recompute_from(layer.map_id, {old_parent_id})
+        computation.recompute_from({old_parent_id})
     _bump_tile_version(db, layer.map_id)
     db.commit()
 

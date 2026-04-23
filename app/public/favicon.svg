@@ -1,0 +1,47 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Edges -->
+  <line x1="16" y1="2" x2="26" y2="7" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="26" y1="7" x2="30" y2="17" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="30" y1="17" x2="25" y2="27" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="25" y1="27" x2="16" y2="30" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="16" y1="30" x2="7" y2="27" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="7" y1="27" x2="2" y2="17" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="2" y1="17" x2="6" y2="7" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="6" y1="7" x2="16" y2="2" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="16" y1="2" x2="21" y2="10" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="26" y1="7" x2="21" y2="10" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="21" y1="10" x2="30" y2="17" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="21" y1="10" x2="24" y2="21" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="30" y1="17" x2="24" y2="21" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="24" y1="21" x2="25" y2="27" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="24" y1="21" x2="14" y2="25" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="25" y1="27" x2="14" y2="25" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="14" y1="25" x2="16" y2="30" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="14" y1="25" x2="7" y2="27" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="14" y1="25" x2="8" y2="17" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="7" y1="27" x2="8" y2="17" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="8" y1="17" x2="2" y2="17" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="8" y1="17" x2="6" y2="7" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="8" y1="17" x2="16" y2="13" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="6" y1="7" x2="16" y2="13" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="16" y1="2" x2="16" y2="13" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="16" y1="13" x2="21" y2="10" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="16" y1="13" x2="24" y2="21" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="16" y1="13" x2="14" y2="25" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="16" y1="13" x2="8" y2="17" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="21" y1="10" x2="14" y2="25" stroke="#334155" stroke-width="1.3" stroke-linecap="round"/>
+  <!-- Nodes -->
+  <circle cx="16" cy="2" r="1.6" fill="#334155"/>
+  <circle cx="26" cy="7" r="1.6" fill="#334155"/>
+  <circle cx="30" cy="17" r="1.6" fill="#334155"/>
+  <circle cx="25" cy="27" r="1.6" fill="#334155"/>
+  <circle cx="16" cy="30" r="1.6" fill="#334155"/>
+  <circle cx="7" cy="27" r="1.6" fill="#334155"/>
+  <circle cx="2" cy="17" r="1.6" fill="#334155"/>
+  <circle cx="6" cy="7" r="1.6" fill="#334155"/>
+  <circle cx="21" cy="10" r="1.6" fill="#334155"/>
+  <circle cx="24" cy="21" r="1.6" fill="#334155"/>
+  <circle cx="14" cy="25" r="1.6" fill="#334155"/>
+  <circle cx="8" cy="17" r="1.6" fill="#334155"/>
+  <circle cx="16" cy="13" r="1.6" fill="#334155"/>
+</svg>
