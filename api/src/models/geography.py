@@ -19,16 +19,35 @@ class ZipCodeGeography(Base, TimestampMixin):
     geom: Mapped[WKBElement | None] = mapped_column(
         Geometry(srid=4326),
         nullable=True,
+        deferred=True,
     )
     geom_z3: Mapped[WKBElement | None] = mapped_column(
         Geometry(srid=4326),
         nullable=True,
+        deferred=True,
+    )
+    geom_z3_merc: Mapped[WKBElement | None] = mapped_column(
+        Geometry(srid=3857, spatial_index=False),
+        nullable=True,
+        deferred=True,
     )
     geom_z7: Mapped[WKBElement | None] = mapped_column(
         Geometry(srid=4326),
         nullable=True,
+        deferred=True,
+    )
+    geom_z7_merc: Mapped[WKBElement | None] = mapped_column(
+        Geometry(srid=3857, spatial_index=False),
+        nullable=True,
+        deferred=True,
     )
     geom_z11: Mapped[WKBElement | None] = mapped_column(
         Geometry(srid=4326),
         nullable=True,
+        deferred=True,
+    )
+    geom_z11_merc: Mapped[WKBElement | None] = mapped_column(
+        Geometry(srid=3857, spatial_index=False),
+        nullable=True,
+        deferred=True,
     )

@@ -1,5 +1,7 @@
 """MVT tile cache service."""
 
+from typing import Any
+
 from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
@@ -20,6 +22,13 @@ def save_tile(db: Session, layer_id: int, endpoint: str, z: int, x: int, y: int,
     )
     db.execute(stmt)
     db.commit()
+
+
+def save_tiles_batch(db: Session, rows: list[dict[str, Any]]) -> None:
+    """Bulk-insert tiles without committing. Caller is responsible for the commit."""
+    if not rows:
+        return
+    db.execute(pg_insert(MvtTileCacheModel).values(rows).on_conflict_do_nothing())
 
 
 def invalidate_layer(db: Session, layer_id: int) -> None:

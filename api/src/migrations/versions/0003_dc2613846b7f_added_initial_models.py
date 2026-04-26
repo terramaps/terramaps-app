@@ -46,13 +46,28 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column(
+            "geom_z3_merc",
+            Geometry(srid=3857, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
+            nullable=True,
+        ),
+        sa.Column(
             "geom_z7",
             Geometry(srid=4326, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
             nullable=True,
         ),
         sa.Column(
+            "geom_z7_merc",
+            Geometry(srid=3857, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
+            nullable=True,
+        ),
+        sa.Column(
             "geom_z11",
             Geometry(srid=4326, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
+            nullable=True,
+        ),
+        sa.Column(
+            "geom_z11_merc",
+            Geometry(srid=3857, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
             nullable=True,
         ),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
@@ -234,13 +249,28 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column(
+            "geom_z3_merc",
+            Geometry(srid=3857, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
+            nullable=True,
+        ),
+        sa.Column(
             "geom_z7",
             Geometry(srid=4326, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
             nullable=True,
         ),
         sa.Column(
+            "geom_z7_merc",
+            Geometry(srid=3857, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
+            nullable=True,
+        ),
+        sa.Column(
             "geom_z11",
             Geometry(srid=4326, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
+            nullable=True,
+        ),
+        sa.Column(
+            "geom_z11_merc",
+            Geometry(srid=3857, dimension=2, spatial_index=False, from_text="ST_GeomFromEWKT", name="geometry"),
             nullable=True,
         ),
         sa.Column("parent_node_id", sa.Integer(), nullable=True),
@@ -329,6 +359,5 @@ def downgrade() -> None:
     op.drop_geospatial_index(
         "idx_geography_zip_codes_geom", table_name="geography_zip_codes", postgresql_using="gist", column_name="geom"
     )
-    op.drop_geospatial_table("geography_zip_codes")
     op.drop_geospatial_table("geography_zip_codes")
     # ### end Alembic commands ###

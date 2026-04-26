@@ -5,6 +5,7 @@ import hashlib
 import io
 import logging
 import re
+import time
 from typing import Any
 
 import pandas as pd
@@ -14,6 +15,8 @@ from sqlalchemy.dialects.postgresql import insert
 from src.models.geography import ZipCodeGeography
 from src.models.graph import LayerModel, MapModel, NodeModel, ZipAssignmentModel
 from src.models.uploads import MapUploadModel
+from src.services import mvt as mvt_service
+from src.services import mvt_cache
 from src.services.computation import ComputationService
 from src.services.s3 import S3Service
 from src.workers import DatabaseTask, celery_app
@@ -21,9 +24,22 @@ from src.workers import DatabaseTask, celery_app
 logger = logging.getLogger(__name__)
 
 _TERRITORY_PALETTE = [
-    "#E63946", "#F4A261", "#2A9D8F", "#457B9D", "#6A4C93", "#F72585",
-    "#4CC9F0", "#7CB518", "#FB8500", "#023E8A", "#8338EC", "#FF006E",
-    "#3A86FF", "#06D6A0", "#FFBE0B", "#FB5607",
+    "#E63946",
+    "#F4A261",
+    "#2A9D8F",
+    "#457B9D",
+    "#6A4C93",
+    "#F72585",
+    "#4CC9F0",
+    "#7CB518",
+    "#FB8500",
+    "#023E8A",
+    "#8338EC",
+    "#FF006E",
+    "#3A86FF",
+    "#06D6A0",
+    "#FFBE0B",
+    "#FB5607",
 ]
 
 
@@ -84,16 +100,12 @@ def _build_parent_lookup(
     warnings: list[str],
 ) -> pd.DataFrame:
     """Attach parent_node_id column to rows_df via name→id lookup."""
-    name_to_id: dict[str, int] = dict(
-        zip(previous_nodes["name"].astype(str), previous_nodes["id"], strict=False)
-    )
+    name_to_id: dict[str, int] = dict(zip(previous_nodes["name"].astype(str), previous_nodes["id"], strict=False))
     rows_df["parent_node_id"] = rows_df[previous_header].apply(
         lambda x, m=name_to_id: m.get(str(x)) if pd.notna(x) and x != "" else None
     )
     misses = rows_df[
-        rows_df["parent_node_id"].isna()
-        & rows_df[previous_header].notna()
-        & (rows_df[previous_header] != "")
+        rows_df["parent_node_id"].isna() & rows_df[previous_header].notna() & (rows_df[previous_header] != "")
     ]
     if not misses.empty:
         sample = misses[previous_header].unique().tolist()[:5]
@@ -119,15 +131,13 @@ def _insert_zip_layer(
     zip_codes_in_file = rows_df[header].tolist()
 
     valid_zips = set(
-        task.db.execute(
-            select(ZipCodeGeography.zip_code).where(ZipCodeGeography.zip_code.in_(zip_codes_in_file))
-        ).scalars().all()
+        task.db.execute(select(ZipCodeGeography.zip_code).where(ZipCodeGeography.zip_code.in_(zip_codes_in_file)))
+        .scalars()
+        .all()
     )
     missing = set(zip_codes_in_file) - valid_zips
     if missing:
-        warnings.append(
-            f"{len(missing)} zip codes not found in geography database. Sample: {sorted(missing)[:10]}"
-        )
+        warnings.append(f"{len(missing)} zip codes not found in geography database. Sample: {sorted(missing)[:10]}")
 
     rows_df = rows_df[rows_df[header].isin(valid_zips)].copy()
 
@@ -186,16 +196,13 @@ def _insert_node_layer(
             "name": str(name),
             "parent_node_id": int(p) if pd.notna(p) else None,
             "color": _TERRITORY_PALETTE[
-                int(hashlib.md5(str(name).encode(), usedforsecurity=False).hexdigest(), 16)
-                % len(_TERRITORY_PALETTE)
+                int(hashlib.md5(str(name).encode(), usedforsecurity=False).hexdigest(), 16) % len(_TERRITORY_PALETTE)
             ],
             "data": None,
         }
         for name, p in zip(names, parent_ids, strict=False)
     ]
-    result = task.db.execute(
-        insert(NodeModel).values(node_rows).returning(NodeModel.id, NodeModel.name)
-    ).tuples()
+    result = task.db.execute(insert(NodeModel).values(node_rows).returning(NodeModel.id, NodeModel.name)).tuples()
     return pd.DataFrame(result, columns=["id", "name"]).astype(object)
 
 
@@ -229,9 +236,9 @@ def import_map_task(self: DatabaseTask, map_id: str) -> None:  # type: ignore[mi
 
         _set_import_step(self, upload, "Inserting nodes")
         layer_rows = (
-            self.db.execute(
-                select(LayerModel).where(LayerModel.map_id == map_id).order_by(LayerModel.order.asc())
-            ).scalars().all()
+            self.db.execute(select(LayerModel).where(LayerModel.map_id == map_id).order_by(LayerModel.order.asc()))
+            .scalars()
+            .all()
         )
         order_to_header = {i: lc["header"] for i, lc in enumerate(layer_configs)}
         layer_and_headers = sorted(
@@ -290,3 +297,59 @@ def import_map_task(self: DatabaseTask, map_id: str) -> None:  # type: ignore[mi
         upload.error_reason = str(exc)
         self.db.commit()
         raise
+
+
+@celery_app.task(base=DatabaseTask, bind=True, queue="terramaps")
+def warm_map_mvt_cache_task(self: DatabaseTask, map_id: str) -> None:  # type: ignore[misc]
+    """Pre-warm the MVT tile cache for all layers in a map at z3–z7.
+
+    Assumes the cache has already been cleared for this map. Renders every
+    tile in the continental US bbox per layer and batches inserts in groups
+    of 50 to keep transactions small.
+    """
+    map_model = self.db.get(MapModel, map_id)
+    if not map_model:
+        logger.error("warm_map_mvt_cache_task: map %s not found", map_id)
+        return
+
+    layers = (
+        self.db.execute(select(LayerModel).where(LayerModel.map_id == map_id).order_by(LayerModel.order.asc()))
+        .scalars()
+        .all()
+    )
+
+    tiles = mvt_service.tiles_for_us(z_min=3, z_max=7)
+    logger.info(
+        "warm_map_mvt_cache_task [%s]: %d layers × %d tiles = %d total",
+        map_id,
+        len(layers),
+        len(tiles),
+        len(layers) * len(tiles),
+    )
+
+    t0 = time.monotonic()
+    for layer in layers:
+        layer_t0 = time.monotonic()
+        batch: list[dict[str, Any]] = []
+        for z, x, y in tiles:
+            tile_bytes = mvt_service.render_tile(self.db, layer, map_model, z, x, y)
+            batch.append({"layer_id": layer.id, "endpoint": "fill", "z": z, "x": x, "y": y, "tile_bytes": tile_bytes})
+            if len(batch) >= 50:
+                mvt_cache.save_tiles_batch(self.db, batch)
+                self.db.commit()
+                batch.clear()
+        if batch:
+            mvt_cache.save_tiles_batch(self.db, batch)
+            self.db.commit()
+        elapsed = time.monotonic() - layer_t0
+        logger.info(
+            "warm_map_mvt_cache_task [%s]: layer %d (order=%d) — %d tiles in %.1fs (%.0f ms/tile)",
+            map_id,
+            layer.id,
+            layer.order,
+            len(tiles),
+            elapsed,
+            elapsed / len(tiles) * 1000,
+        )
+
+    logger.info("warm_map_mvt_cache_task [%s]: complete in %.1fs", map_id, time.monotonic() - t0)

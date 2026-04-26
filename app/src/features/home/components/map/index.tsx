@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react"
-import MapGL, { type MapRef } from "react-map-gl/maplibre"
+import MapGL, { type MapProps, type MapRef } from "react-map-gl/maplibre"
 
 import type { LayerViewOptions } from "./config"
 import type { BaseMapName } from "./config"
@@ -22,7 +22,7 @@ const EMPTY_STYLE = {
   layers: [],
 }
 
-const INITIAL_VIEW_STATE = {
+const INITIAL_VIEW_STATE: MapProps["initialViewState"] = {
   longitude: -98.5795,
   latitude: 39.8283,
   zoom: 4,
@@ -253,6 +253,8 @@ export const Map = forwardRef<
         cursor={currentTool === "select" ? "crosshair" : "grab"}
         initialViewState={INITIAL_VIEW_STATE}
         mapStyle={EMPTY_STYLE}
+        minZoom={4}
+        maxZoom={10}
         ref={mapRef}
         onLoad={(evt) => {
           const map = evt.target

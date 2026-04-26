@@ -1361,6 +1361,46 @@
         }
       }
     },
+    "/tiles/warm": {
+      "get": {
+        "tags": [
+          "MVT"
+        ],
+        "summary": "Warm Cache",
+        "operationId": "warm_cache_tiles_warm_get",
+        "parameters": [
+          {
+            "name": "map_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Map Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/maps": {
       "get": {
         "tags": [

@@ -38,14 +38,17 @@ _GEOM_KWARGS = {
 }
 
 _COPY_SQL = text("""
-    INSERT INTO geography_zip_codes (zip_code, color, geom, geom_z3, geom_z7, geom_z11)
+    INSERT INTO geography_zip_codes (zip_code, color, geom, geom_z3, geom_z3_merc, geom_z7, geom_z7_merc, geom_z11, geom_z11_merc)
     SELECT DISTINCT ON (lpad(zip, 5, '0'))
         lpad(zip, 5, '0'),
         COALESCE(color, '#000000'),
         ST_MakeValid(geom),
         ST_Transform(ST_MakeValid(ST_SnapToGrid(ST_Transform(geom, 3857), 19568.0)), 4326),
+        ST_MakeValid(ST_SnapToGrid(ST_Transform(geom, 3857), 19568.0)),
         ST_Transform(ST_MakeValid(ST_SnapToGrid(ST_Transform(geom, 3857),  1223.0)), 4326),
-        ST_Transform(ST_MakeValid(ST_SnapToGrid(ST_Transform(geom, 3857),    76.0)), 4326)
+        ST_MakeValid(ST_SnapToGrid(ST_Transform(geom, 3857),  1223.0)),
+        ST_Transform(ST_MakeValid(ST_SnapToGrid(ST_Transform(geom, 3857),    76.0)), 4326),
+        ST_MakeValid(ST_SnapToGrid(ST_Transform(geom, 3857),    76.0))
     FROM boundary_data
     WHERE zip IS NOT NULL
       AND zip != ''

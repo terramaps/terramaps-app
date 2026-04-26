@@ -183,9 +183,12 @@ class ComputationService(BaseService):
         sql = text("""
             WITH zip_unions AS (
                 SELECT za.parent_node_id AS pid,
-                       ST_UnaryUnion(ST_Collect(gz.geom_z3))  AS g3,
-                       ST_UnaryUnion(ST_Collect(gz.geom_z7))  AS g7,
-                       ST_UnaryUnion(ST_Collect(gz.geom_z11)) AS g11
+                       ST_UnaryUnion(ST_Collect(gz.geom_z3))       AS g3,
+                       ST_UnaryUnion(ST_Collect(gz.geom_z3_merc))  AS g3_merc,
+                       ST_UnaryUnion(ST_Collect(gz.geom_z7))       AS g7,
+                       ST_UnaryUnion(ST_Collect(gz.geom_z7_merc))  AS g7_merc,
+                       ST_UnaryUnion(ST_Collect(gz.geom_z11))      AS g11,
+                       ST_UnaryUnion(ST_Collect(gz.geom_z11_merc)) AS g11_merc
                 FROM zip_assignments za
                 JOIN geography_zip_codes gz ON gz.zip_code = za.zip_code
                 WHERE za.parent_node_id = ANY(:node_ids)
@@ -194,9 +197,12 @@ class ComputationService(BaseService):
                 SELECT id FROM nodes WHERE id = ANY(:node_ids)
             )
             UPDATE nodes p
-            SET geom_z3  = zu.g3,
-                geom_z7  = zu.g7,
-                geom_z11 = zu.g11
+            SET geom_z3      = zu.g3,
+                geom_z3_merc = zu.g3_merc,
+                geom_z7      = zu.g7,
+                geom_z7_merc = zu.g7_merc,
+                geom_z11     = zu.g11,
+                geom_z11_merc = zu.g11_merc
             FROM affected a
             LEFT JOIN zip_unions zu ON zu.pid = a.id
             WHERE p.id = a.id
@@ -214,9 +220,12 @@ class ComputationService(BaseService):
         sql = text("""
             WITH child_unions AS (
                 SELECT c.parent_node_id AS pid,
-                       ST_UnaryUnion(ST_Collect(c.geom_z3))  AS g3,
-                       ST_UnaryUnion(ST_Collect(c.geom_z7))  AS g7,
-                       ST_UnaryUnion(ST_Collect(c.geom_z11)) AS g11
+                       ST_UnaryUnion(ST_Collect(c.geom_z3))       AS g3,
+                       ST_UnaryUnion(ST_Collect(c.geom_z3_merc))  AS g3_merc,
+                       ST_UnaryUnion(ST_Collect(c.geom_z7))       AS g7,
+                       ST_UnaryUnion(ST_Collect(c.geom_z7_merc))  AS g7_merc,
+                       ST_UnaryUnion(ST_Collect(c.geom_z11))      AS g11,
+                       ST_UnaryUnion(ST_Collect(c.geom_z11_merc)) AS g11_merc
                 FROM nodes c
                 WHERE c.parent_node_id = ANY(:node_ids)
                 GROUP BY c.parent_node_id
@@ -224,9 +233,12 @@ class ComputationService(BaseService):
                 SELECT id FROM nodes WHERE id = ANY(:node_ids)
             )
             UPDATE nodes p
-            SET geom_z3  = cu.g3,
-                geom_z7  = cu.g7,
-                geom_z11 = cu.g11
+            SET geom_z3       = cu.g3,
+                geom_z3_merc  = cu.g3_merc,
+                geom_z7       = cu.g7,
+                geom_z7_merc  = cu.g7_merc,
+                geom_z11      = cu.g11,
+                geom_z11_merc = cu.g11_merc
             FROM affected a
             LEFT JOIN child_unions cu ON cu.pid = a.id
             WHERE p.id = a.id
