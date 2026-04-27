@@ -44,17 +44,22 @@ export default function DataStep({
   onComplete,
   onBack,
 }: DataStepProps) {
-  const [fieldConfigs, setFieldConfigs] = React.useState<Map<string, DataField>>(
-    () => {
-      const map = new Map<string, DataField>()
-      headers
-        .filter((h) => !layerHeaders.includes(h))
-        .forEach((header) => {
-          map.set(header, { name: header, header, type: "text", aggregations: [] })
+  const [fieldConfigs, setFieldConfigs] = React.useState<
+    Map<string, DataField>
+  >(() => {
+    const map = new Map<string, DataField>()
+    headers
+      .filter((h) => !layerHeaders.includes(h))
+      .forEach((header) => {
+        map.set(header, {
+          name: header,
+          header,
+          type: "text",
+          aggregations: [],
         })
-      return map
-    },
-  )
+      })
+    return map
+  })
 
   const [selectedField, setSelectedField] = React.useState<string | null>(
     Array.from(fieldConfigs.keys())[0] ?? null,
@@ -172,7 +177,9 @@ export default function DataStep({
                       }`}
                     >
                       <button
-                        onClick={() => setSelectedField(key)}
+                        onClick={() => {
+                          setSelectedField(key)
+                        }}
                         className="w-full text-left"
                       >
                         <div className="space-y-1.5">
@@ -182,7 +189,9 @@ export default function DataStep({
                           <div className="flex items-center gap-2">
                             <Badge
                               variant={
-                                config?.type === "number" ? "default" : "secondary"
+                                config?.type === "number"
+                                  ? "default"
+                                  : "secondary"
                               }
                               className="shrink-0"
                             >
@@ -242,7 +251,9 @@ export default function DataStep({
             {selectedConfig ? (
               <>
                 <div className="shrink-0 border-b border-border p-4">
-                  <h3 className="font-semibold text-lg">{selectedConfig.name}</h3>
+                  <h3 className="font-semibold text-lg">
+                    {selectedConfig.name}
+                  </h3>
                   <p className="text-muted-foreground text-sm mt-1">
                     Configure how this field should be processed
                   </p>
@@ -277,7 +288,8 @@ export default function DataStep({
                       <Select
                         value={selectedConfig.header}
                         onValueChange={(value) => {
-                          if (selectedField) updateFieldHeader(selectedField, value)
+                          if (selectedField)
+                            updateFieldHeader(selectedField, value)
                         }}
                       >
                         <SelectTrigger>
@@ -295,11 +307,14 @@ export default function DataStep({
 
                     {/* Data Type */}
                     <div className="space-y-3">
-                      <Label className="text-base font-semibold">Data Type</Label>
+                      <Label className="text-base font-semibold">
+                        Data Type
+                      </Label>
                       <RadioGroup
                         value={selectedConfig.type}
                         onValueChange={(value: "text" | "number") => {
-                          if (selectedField) updateFieldType(selectedField, value)
+                          if (selectedField)
+                            updateFieldType(selectedField, value)
                         }}
                       >
                         <div className="flex items-center space-x-2">
@@ -348,14 +363,19 @@ export default function DataStep({
                                     checked={isChecked}
                                     onCheckedChange={() => {
                                       if (selectedField)
-                                        toggleAggregation(selectedField, option.value)
+                                        toggleAggregation(
+                                          selectedField,
+                                          option.value,
+                                        )
                                     }}
                                   />
                                   <label
                                     htmlFor={`agg-${selectedField ?? ""}-${option.value}`}
                                     className="flex-1 cursor-pointer"
                                   >
-                                    <div className="font-medium">{option.label}</div>
+                                    <div className="font-medium">
+                                      {option.label}
+                                    </div>
                                     <div className="text-muted-foreground text-xs mt-0.5">
                                       {option.description}
                                     </div>

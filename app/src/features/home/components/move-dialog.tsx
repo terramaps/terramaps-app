@@ -4,9 +4,8 @@
  * For zip layers (order=0): shows order=1 territory nodes as parent options.
  * For node layers (order≥1): shows nodes from the layer directly above.
  */
-
-import { useState } from "react"
 import pluralize from "pluralize"
+import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -102,7 +101,9 @@ export function MoveDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Move {count} {itemLabel}</DialogTitle>
+          <DialogTitle>
+            Move {count} {itemLabel}
+          </DialogTitle>
           <DialogDescription>
             Select a new parent{parentLayer ? ` ${parentLayer.name}` : ""}, or
             choose "No parent" to unassign.
@@ -126,7 +127,9 @@ export function MoveDialog({
         <DialogFooter>
           <Button
             variant="outline"
-            onClick={() => handleOpenChange(false)}
+            onClick={() => {
+              handleOpenChange(false)
+            }}
             disabled={isPending}
           >
             Cancel

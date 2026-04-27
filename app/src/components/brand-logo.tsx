@@ -7,7 +7,11 @@ interface BrandLogoProps {
   iconClassName?: string
 }
 
-export function BrandLogo({ className, iconOnly = false, iconClassName }: BrandLogoProps) {
+export function BrandLogo({
+  className,
+  iconOnly = false,
+  iconClassName,
+}: BrandLogoProps) {
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
       <img

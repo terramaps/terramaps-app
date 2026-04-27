@@ -33,7 +33,8 @@ export default function LayerStep({
   onBack,
 }: LayerStepProps) {
   const [layers, setLayers] = React.useState<LayerConfig[]>(() => {
-    const defaults = suggestedLayers.length > 0 ? suggestedLayers : headers.slice(0, 4)
+    const defaults =
+      suggestedLayers.length > 0 ? suggestedLayers : headers.slice(0, 4)
     return defaults.map((header, index) => ({
       level: index,
       name: header,

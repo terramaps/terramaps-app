@@ -101,12 +101,16 @@ export function ExportZttDialog({
           </p>
         </div>
 
-        {error && (
-          <p className="text-destructive text-sm">{error}</p>
-        )}
+        {error && <p className="text-destructive text-sm">{error}</p>}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isExporting}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              onOpenChange(false)
+            }}
+            disabled={isExporting}
+          >
             Cancel
           </Button>
           <Button onClick={() => void handleExport()} disabled={isExporting}>

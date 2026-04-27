@@ -28,7 +28,8 @@ function buildLabelExpression(
   const nameParts: maplibregl.ExpressionSpecification[] = []
   for (let i = 0; i < fields.length; i++) {
     const key = fields[i]
-    if (i > 0) nameParts.push("\n" as unknown as maplibregl.ExpressionSpecification)
+    if (i > 0)
+      nameParts.push("\n" as unknown as maplibregl.ExpressionSpecification)
     if (key === "name") {
       nameParts.push(isZipLayer ? ["get", "zip_code"] : ["get", "name"])
     } else {
@@ -55,13 +56,14 @@ function buildLabelExpression(
   // Two-line format expression: name line (dark) + data value line (blue, smaller)
   return [
     "format",
-    nameExpr, {},
-    "\n", {},
+    nameExpr,
+    {},
+    "\n",
+    {},
     ["coalesce", ["to-string", ["get", dataLabelField]], "—"],
     { "text-color": "#2563eb", "font-scale": 0.82 },
   ] as unknown as maplibregl.ExpressionSpecification
 }
-
 
 export function updateSources(
   map: maplibregl.Map,
@@ -114,8 +116,15 @@ export function updateLayers(
   })
 
   layers.forEach((layerOption) => {
-    const { id, order, showFill, showOutline, showLabel, labelFields, dataLabelField } =
-      layerOption
+    const {
+      id,
+      order,
+      showFill,
+      showOutline,
+      showLabel,
+      labelFields,
+      dataLabelField,
+    } = layerOption
     const sourceLayer = order === 0 ? "zips" : "nodes"
     const fillLayerId = `layer-${id.toString()}-fill`
     const selectionLayerId = `layer-${id.toString()}-selection`
@@ -187,7 +196,11 @@ export function updateLayers(
 
     // Label layer — always on top.
     // Visual weight scales with layer order so higher-level territories read more prominently.
-    const textFieldExpr = buildLabelExpression(labelFields, order === 0, dataLabelField)
+    const textFieldExpr = buildLabelExpression(
+      labelFields,
+      order === 0,
+      dataLabelField,
+    )
     const labelSizeMin = Math.min(10 + order * 2, 16)
     const labelSizeMax = Math.min(13 + order * 4, 24)
     const labelFont =

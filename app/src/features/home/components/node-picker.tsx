@@ -5,8 +5,11 @@
  * an optional list of nodeIds to exclude from the results, and a controlled
  * value/onChange pair.
  */
-
-import { IconChevronLeft, IconChevronRight, IconSearch } from "@tabler/icons-react"
+import {
+  IconChevronLeft,
+  IconChevronRight,
+  IconSearch,
+} from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
 import { useState } from "react"
 
@@ -64,10 +67,15 @@ export function NodePicker({
   const excludeSet = new Set(excludeNodeIds)
   const hintSet = new Set(hintNodeIds)
 
-  const allNodes = (nodesQuery.data?.nodes ?? []).filter((n) => !excludeSet.has(n.id))
+  const allNodes = (nodesQuery.data?.nodes ?? []).filter(
+    (n) => !excludeSet.has(n.id),
+  )
   const totalPages = nodesQuery.data?.total_pages ?? 1
 
-  const hintNodes = page === 1 && hintNodeIds.length > 0 ? allNodes.filter((n) => hintSet.has(n.id)) : []
+  const hintNodes =
+    page === 1 && hintNodeIds.length > 0
+      ? allNodes.filter((n) => hintSet.has(n.id))
+      : []
   const regularNodes = allNodes.filter((n) => !hintSet.has(n.id))
 
   const handleSearchChange = (val: string) => {
@@ -75,13 +83,25 @@ export function NodePicker({
     setPage(1)
   }
 
-  const Row = ({ id, name, className }: { id: number | null; name: string; className?: string }) => (
+  const Row = ({
+    id,
+    name,
+    className,
+  }: {
+    id: number | null
+    name: string
+    className?: string
+  }) => (
     <button
       type="button"
-      onClick={() => onChange(id)}
+      onClick={() => {
+        onChange(id)
+      }}
       className={cn(
         "w-full rounded-md px-3 py-2 text-left text-sm transition-colors",
-        value === id ? "bg-primary text-primary-foreground" : "hover:bg-muted text-foreground",
+        value === id
+          ? "bg-primary text-primary-foreground"
+          : "hover:bg-muted text-foreground",
         className,
       )}
     >
@@ -96,7 +116,9 @@ export function NodePicker({
         <Input
           placeholder="Search..."
           value={search}
-          onChange={(e) => handleSearchChange(e.target.value)}
+          onChange={(e) => {
+            handleSearchChange(e.target.value)
+          }}
           className="pl-8"
         />
       </div>
@@ -105,7 +127,11 @@ export function NodePicker({
         <div className="p-1">
           {showNoParent && (
             <>
-              <Row id={null} name={noParentLabel} className="text-muted-foreground italic" />
+              <Row
+                id={null}
+                name={noParentLabel}
+                className="text-muted-foreground italic"
+              />
               <Separator className="my-1" />
             </>
           )}
@@ -113,7 +139,9 @@ export function NodePicker({
           {hintNodes.length > 0 && (
             <>
               {hintLabel && (
-                <p className="text-muted-foreground px-3 pb-1 text-xs font-medium">{hintLabel}</p>
+                <p className="text-muted-foreground px-3 pb-1 text-xs font-medium">
+                  {hintLabel}
+                </p>
               )}
               {hintNodes.map((n) => (
                 <Row key={n.id} id={n.id} name={n.name} />
@@ -123,11 +151,15 @@ export function NodePicker({
           )}
 
           {nodesQuery.isPending && (
-            <p className="text-muted-foreground px-3 py-4 text-center text-sm">Loading…</p>
+            <p className="text-muted-foreground px-3 py-4 text-center text-sm">
+              Loading…
+            </p>
           )}
 
           {!nodesQuery.isPending && allNodes.length === 0 && (
-            <p className="text-muted-foreground px-3 py-4 text-center text-sm">No results</p>
+            <p className="text-muted-foreground px-3 py-4 text-center text-sm">
+              No results
+            </p>
           )}
 
           {regularNodes.map((n) => (
@@ -143,7 +175,9 @@ export function NodePicker({
             variant="ghost"
             size="sm"
             disabled={page === 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            onClick={() => {
+              setPage((p) => Math.max(1, p - 1))
+            }}
           >
             <IconChevronLeft className="h-4 w-4" />
             Prev
@@ -156,7 +190,9 @@ export function NodePicker({
             variant="ghost"
             size="sm"
             disabled={page >= totalPages}
-            onClick={() => setPage((p) => p + 1)}
+            onClick={() => {
+              setPage((p) => p + 1)
+            }}
           >
             Next
             <IconChevronRight className="h-4 w-4" />

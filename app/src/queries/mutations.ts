@@ -24,7 +24,10 @@ export const useUploadSpreadsheetMutation = () => {
       if (!response.ok) {
         throw new Error("Upload failed")
       }
-      return response.json() as Promise<{ document_id: string; status: "parsing" }>
+      return response.json() as Promise<{
+        document_id: string
+        status: "parsing"
+      }>
     },
   })
 }
@@ -36,13 +39,21 @@ export const useCreateMapMutation = () => {
       document_id: string
       name: string
       layers: { name: string; header: string }[]
-      data_fields: { name: string; header: string; type: "text" | "number"; aggregations: ("sum" | "avg")[] }[]
+      data_fields: {
+        name: string
+        header: string
+        type: "text" | "number"
+        aggregations: ("sum" | "avg")[]
+      }[]
     }) => {
       const response = await fetchClient.POST("/maps", {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         body: variables as any,
       })
-      if (!response.data || (response.response.status !== 200 && response.response.status !== 202)) {
+      if (
+        !response.data ||
+        (response.response.status !== 200 && response.response.status !== 202)
+      ) {
         throw new Error("Failed to create map")
       }
       return response.data
@@ -209,7 +220,11 @@ export const useBulkDeleteNodesMutation = () => {
     mutationFn: async (
       vars:
         | { nodeIds: number[]; childAction: "orphan" }
-        | { nodeIds: number[]; childAction: "reparent"; reparentNodeId: number },
+        | {
+            nodeIds: number[]
+            childAction: "reparent"
+            reparentNodeId: number
+          },
     ) => {
       const response = await fetchClient.DELETE("/nodes/bulk", {
         body:
@@ -256,9 +271,11 @@ export const useUpdateNodeMutation = () => {
       return { ...response.data, mapId: vars.mapId }
     },
     onSuccess: (data) => {
-      queryClient.setQueryData(queries.getNode(data.id as number).queryKey, data)
+      queryClient.setQueryData(queries.getNode(data.id).queryKey, data)
       void queryClient.invalidateQueries({ queryKey: queries._nodes() })
-      void queryClient.invalidateQueries({ queryKey: queries.getMap(data.mapId).queryKey })
+      void queryClient.invalidateQueries({
+        queryKey: queries.getMap(data.mapId).queryKey,
+      })
     },
   })
 }
@@ -266,7 +283,10 @@ export const useUpdateNodeMutation = () => {
 export const useUpdateMeMutation = () => {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (vars: { name: string | null; avatar_url: string | null }) => {
+    mutationFn: async (vars: {
+      name: string | null
+      avatar_url: string | null
+    }) => {
       const response = await fetchClient.PATCH("/me", {
         body: { name: vars.name, avatar_url: vars.avatar_url },
       })

@@ -1,9 +1,10 @@
 import { IconCheck, IconLoader2, IconMail } from "@tabler/icons-react"
-import { type FormEvent, useEffect, useState } from "react"
+import { useFormik } from "formik"
+import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 
-import { AppRoutes, PageName } from "@/app/routes"
 import { useMe } from "@/app/providers/me-provider/context"
+import { AppRoutes, PageName } from "@/app/routes"
 import { PageLayout } from "@/components/layout"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -32,39 +33,41 @@ export default function SettingsPage() {
   const navigate = useNavigate()
   const user = useMe()
 
-  const [name, setName] = useState(user.name ?? "")
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [resetSent, setResetSent] = useState(false)
 
   const updateMeMutation = useUpdateMeMutation()
   const resetMutation = useRequestPasswordResetMutation()
 
-  useEffect(() => {
-    setName(user.name ?? "")
-  }, [user.name])
-
-  const handleSave = (e: FormEvent) => {
-    e.preventDefault()
-    setSaveSuccess(false)
-    updateMeMutation.mutate(
-      { name: name.trim() || null, avatar_url: null },
-      {
-        onSuccess: () => {
-          setSaveSuccess(true)
-          setTimeout(() => setSaveSuccess(false), 3000)
+  const meFormik = useFormik({
+    initialValues: { name: user.name ?? "" },
+    onSubmit: (vals) => {
+      setSaveSuccess(false)
+      updateMeMutation.mutate(
+        { name: vals.name.trim() || null, avatar_url: null },
+        {
+          onSuccess: () => {
+            setSaveSuccess(true)
+            setTimeout(() => {
+              setSaveSuccess(false)
+            }, 3000)
+          },
         },
-      },
-    )
-  }
+      )
+    },
+    enableReinitialize: true,
+  })
 
   const handleRequestReset = () => {
     setResetSent(false)
     resetMutation.mutate(undefined, {
-      onSuccess: () => setResetSent(true),
+      onSuccess: () => {
+        setResetSent(true)
+      },
     })
   }
 
-  const initials = getInitials(name || user.name, user.email)
+  const initials = getInitials(meFormik.values.name, user.email)
 
   return (
     <PageLayout>
@@ -82,7 +85,6 @@ export default function SettingsPage() {
 
           <div className="flex-1 flex justify-center px-4 py-10">
             <div className="w-full max-w-lg space-y-8">
-
               {/* Profile section */}
               <section>
                 <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4">
@@ -92,17 +94,23 @@ export default function SettingsPage() {
                   {/* Avatar preview */}
                   <div className="flex items-center gap-4">
                     <Avatar size="lg" className="size-16">
-                      <AvatarFallback className="text-lg">{initials}</AvatarFallback>
+                      <AvatarFallback className="text-lg">
+                        {initials}
+                      </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="font-medium">{name || user.email}</p>
-                      <p className="text-sm text-muted-foreground">{user.email}</p>
+                      <p className="font-medium">
+                        {meFormik.values.name || user.email}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {user.email}
+                      </p>
                     </div>
                   </div>
 
                   <Separator />
 
-                  <form onSubmit={handleSave} className="space-y-4">
+                  <form onSubmit={meFormik.handleSubmit} className="space-y-4">
                     {/* Email (read-only) */}
                     <div className="space-y-1.5">
                       <Label htmlFor="email">Email</Label>
@@ -122,8 +130,10 @@ export default function SettingsPage() {
                         id="name"
                         type="text"
                         placeholder="Your name"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
+                        value={meFormik.values.name}
+                        onChange={(e) => {
+                          void meFormik.setFieldValue("name", e.target.value)
+                        }}
                         autoComplete="name"
                       />
                     </div>
@@ -195,7 +205,6 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </section>
-
             </div>
           </div>
         </div>

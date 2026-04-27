@@ -6,13 +6,7 @@
  * child count. For zip codes (order = 0): shows the zip code and its current
  * territory assignment (read-only for now).
  */
-
-import {
-  IconCheck,
-  IconLoader2,
-  IconPencil,
-  IconX,
-} from "@tabler/icons-react"
+import { IconCheck, IconLoader2, IconPencil, IconX } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
 import { useEffect, useState } from "react"
 
@@ -20,17 +14,17 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { NodePicker } from "@/features/home/components/node-picker"
+import { Separator } from "@/components/ui/separator"
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import { Separator } from "@/components/ui/separator"
+import { NodePicker } from "@/features/home/components/node-picker"
+import type { components } from "@/lib/api/v1"
 import { useUpdateNodeMutation } from "@/queries/mutations"
 import { queries } from "@/queries/queries"
-import type { components } from "@/lib/api/v1"
 
 type SearchResultItem = components["schemas"]["SearchResultItem"]
 type Layer = components["schemas"]["Layer"]
@@ -98,15 +92,17 @@ function NodeDetail({
 
   const layer = layers.find((l) => l.id === result.layer_id)
   // The layer one order above — used as the parent picker target
-  const parentLayer = layers.find(
-    (l) => layer && l.order === layer.order + 1,
-  )
+  const parentLayer = layers.find((l) => layer && l.order === layer.order + 1)
 
   const handleSave = () => {
     if (!node) return
     updateMutation.mutate(
       { nodeId, mapId: layer?.map_id ?? "", name, color, parentNodeId },
-      { onSuccess: () => setEditing(false) },
+      {
+        onSuccess: () => {
+          setEditing(false)
+        },
+      },
     )
   }
 
@@ -127,13 +123,19 @@ function NodeDetail({
           <label className="relative mt-0.5 shrink-0 cursor-pointer">
             <span
               className="border-border block h-6 w-6 rounded-full border-2"
-              style={{ backgroundColor: editing ? color : (node?.color ?? result.color) }}
+              style={{
+                backgroundColor: editing
+                  ? color
+                  : (node?.color ?? result.color),
+              }}
             />
             {editing && (
               <input
                 type="color"
                 value={color}
-                onChange={(e) => setColor(e.target.value)}
+                onChange={(e) => {
+                  setColor(e.target.value)
+                }}
                 className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
               />
             )}
@@ -143,7 +145,9 @@ function NodeDetail({
             {editing ? (
               <Input
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value)
+                }}
                 className="h-7 text-base font-medium"
                 autoFocus
               />
@@ -161,7 +165,9 @@ function NodeDetail({
             <Button
               variant="ghost"
               size="icon-sm"
-              onClick={() => setEditing(true)}
+              onClick={() => {
+                setEditing(true)
+              }}
               className="shrink-0"
             >
               <IconPencil className="h-4 w-4" />

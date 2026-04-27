@@ -9,9 +9,8 @@
  * We always show both options since we can't cheaply know child count for
  * zip assignments (order=1 nodes).
  */
-
-import { useState } from "react"
 import pluralize from "pluralize"
+import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -87,7 +86,11 @@ export function DeleteDialog({
 
     bulkDeleteMutation.mutate(
       childAction === "reparent"
-        ? { nodeIds: selectedNodeIds, childAction: "reparent", reparentNodeId: reparentNodeId! }
+        ? {
+            nodeIds: selectedNodeIds,
+            childAction: "reparent",
+            reparentNodeId: reparentNodeId!,
+          }
         : { nodeIds: selectedNodeIds, childAction: "orphan" },
       {
         onSuccess: () => {
@@ -179,7 +182,9 @@ export function DeleteDialog({
         <DialogFooter>
           <Button
             variant="outline"
-            onClick={() => handleOpenChange(false)}
+            onClick={() => {
+              handleOpenChange(false)
+            }}
             disabled={isPending}
           >
             Cancel

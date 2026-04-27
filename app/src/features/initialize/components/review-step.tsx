@@ -220,7 +220,11 @@ export default function ReviewStep({
           <Button onClick={onBack} variant="outline" size="lg">
             Back
           </Button>
-          <Button onClick={onComplete} size="lg" disabled={!name.trim() || isSubmitting}>
+          <Button
+            onClick={onComplete}
+            size="lg"
+            disabled={!name.trim() || isSubmitting}
+          >
             Create Project
           </Button>
         </div>

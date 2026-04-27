@@ -36,6 +36,9 @@ export type RouteParamsType = {
   [PageName.Versions]: {
     query: {
       hello?: "world"
+      // this actually prevents a TS error in use-query-param.ts
+      // allowing for checking if a query value is non null
+      preventTsError: ""
     }
   }
   [PageName.Home]: {
@@ -134,7 +137,10 @@ class RouteClass<T extends PageName> {
 
     if (pathParams) {
       for (const key in pathParams) {
-        path = path.replace(`:${key}`, (pathParams as Record<string, string>)[key])
+        path = path.replace(
+          `:${key}`,
+          (pathParams as Record<string, string>)[key],
+        )
       }
     }
 

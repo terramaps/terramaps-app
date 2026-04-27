@@ -124,9 +124,12 @@ export default function HomePage() {
 
   // Track which label fields are active per layer (ordered list shown stacked on map)
   const [labelFields, setLabelFields] = useState<Record<number, string[]>>({})
-  const [dataLabelFields, setDataLabelFields] = useState<Record<number, string | null>>({})
-  const setDataLabelField = (layerId: number, field: string | null) =>
+  const [dataLabelFields, setDataLabelFields] = useState<
+    Record<number, string | null>
+  >({})
+  const setDataLabelField = (layerId: number, field: string | null) => {
     setDataLabelFields((prev) => ({ ...prev, [layerId]: field }))
+  }
   const queryClient = useQueryClient()
   const maps = useMaps()
   const me = useMe()
@@ -148,6 +151,39 @@ export default function HomePage() {
   const [labelLayerIds, setLabelLayerIds] = useState<Set<number>>(new Set())
   const [currentTool, setCurrentTool] = useState<"pan" | "select">("pan")
   const logoutMutation = useLogoutMutation()
+
+  const [selectedNodeIds, setSelectedNodeIds] = useState<number[]>([])
+  const [selectedZipCodes, setSelectedZipCodes] = useState<string[]>([])
+
+  // Dialog state
+  const [moveOpen, setMoveOpen] = useState(false)
+  const [mergeOpen, setMergeOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [exportZttOpen, setExportZttOpen] = useState(false)
+
+  const [activeLayerId, setActiveLayerId] = useState<number | undefined>(
+    undefined,
+  )
+  const activeLayer = layersQuery.data?.find(
+    (layer) => layer.id === activeLayerId,
+  )
+
+  // Clear selection, reset MapLibre visual state, and close all dialogs
+  const clearSelection = () => {
+    if (mapRef.current && activeLayerId != null) {
+      const map = mapRef.current.getMap()
+      if (activeLayer?.order === 0) {
+        updateSelectedZipStates(map, activeLayerId, selectedZipCodes, [])
+      } else {
+        updateSelectedNodeStates(map, activeLayerId, selectedNodeIds, [])
+      }
+    }
+    setSelectedNodeIds([])
+    setSelectedZipCodes([])
+    setMoveOpen(false)
+    setMergeOpen(false)
+    setDeleteOpen(false)
+  }
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -174,20 +210,6 @@ export default function HomePage() {
   })
 
   const spatialSelectMutation = useSpatialSelectMutation()
-  const [activeLayerId, setActiveLayerId] = useState<number | undefined>(
-    undefined,
-  )
-  const activeLayer = layersQuery.data?.find(
-    (layer) => layer.id === activeLayerId,
-  )
-  const [selectedNodeIds, setSelectedNodeIds] = useState<number[]>([])
-  const [selectedZipCodes, setSelectedZipCodes] = useState<string[]>([])
-
-  // Dialog state
-  const [moveOpen, setMoveOpen] = useState(false)
-  const [mergeOpen, setMergeOpen] = useState(false)
-  const [deleteOpen, setDeleteOpen] = useState(false)
-  const [exportZttOpen, setExportZttOpen] = useState(false)
 
   // Search / detail sheet state
   const [detailResult, setDetailResult] = useState<SearchResultItem | null>(
@@ -228,23 +250,6 @@ export default function HomePage() {
 
   const hasSelection = selectionCount > 0
   const isZipLayer = activeLayer?.order === 0
-
-  // Clear selection, reset MapLibre visual state, and close all dialogs
-  const clearSelection = () => {
-    if (mapRef.current && activeLayerId != null) {
-      const map = mapRef.current.getMap()
-      if (activeLayer?.order === 0) {
-        updateSelectedZipStates(map, activeLayerId, selectedZipCodes, [])
-      } else {
-        updateSelectedNodeStates(map, activeLayerId, selectedNodeIds, [])
-      }
-    }
-    setSelectedNodeIds([])
-    setSelectedZipCodes([])
-    setMoveOpen(false)
-    setMergeOpen(false)
-    setDeleteOpen(false)
-  }
 
   const handleClickSelect = (result: ClickSelectResult, additive: boolean) => {
     if (!mapRef.current || activeLayerId == null) return
@@ -299,7 +304,14 @@ export default function HomePage() {
             dataLabelField: dataLabelFields[_layer.id] ?? null,
           }))
         : [],
-    [layersQuery.data, fillLayerId, borderLayerIds, labelLayerIds, labelFields, dataLabelFields],
+    [
+      layersQuery.data,
+      fillLayerId,
+      borderLayerIds,
+      labelLayerIds,
+      labelFields,
+      dataLabelFields,
+    ],
   )
 
   const toggleFill = (layerId: number) => {
@@ -737,22 +749,36 @@ export default function HomePage() {
                                   <p className="text-muted-foreground/70 px-1.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wider">
                                     Data label
                                   </p>
-                                  {([{ mvtProp: null as string | null, label: "None" }, ...mapDataFields.flatMap((f) =>
-                                    f.aggregations.map((agg) => ({
-                                      mvtProp: `${f.field}_${agg}`,
-                                      label: `${f.label || f.field} (${agg})`,
-                                    }))
-                                  )]).map(({ mvtProp, label }) => {
-                                    const isActive = (dataLabelFields[layer.id] ?? null) === mvtProp
+                                  {[
+                                    {
+                                      mvtProp: null as string | null,
+                                      label: "None",
+                                    },
+                                    ...mapDataFields.flatMap((f) =>
+                                      f.aggregations.map((agg) => ({
+                                        mvtProp: `${f.field}_${agg}`,
+                                        label: `${f.label || f.field} (${agg})`,
+                                      })),
+                                    ),
+                                  ].map(({ mvtProp, label }) => {
+                                    const isActive =
+                                      (dataLabelFields[layer.id] ?? null) ===
+                                      mvtProp
                                     return (
                                       <button
                                         key={mvtProp ?? "none"}
-                                        onClick={() => setDataLabelField(layer.id, mvtProp)}
+                                        onClick={() => {
+                                          setDataLabelField(layer.id, mvtProp)
+                                        }}
                                         className={`flex w-full items-center gap-2 rounded px-1.5 py-0.5 text-left transition-colors ${
-                                          isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                                          isActive
+                                            ? "text-primary"
+                                            : "text-muted-foreground hover:text-foreground"
                                         }`}
                                       >
-                                        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isActive ? "bg-primary" : "bg-muted-foreground/25"}`} />
+                                        <span
+                                          className={`h-1.5 w-1.5 shrink-0 rounded-full ${isActive ? "bg-primary" : "bg-muted-foreground/25"}`}
+                                        />
                                         <span className="text-xs">{label}</span>
                                       </button>
                                     )
@@ -962,24 +988,35 @@ export default function HomePage() {
                   {[...layersQuery.data]
                     .sort((a, b) => b.order - a.order)
                     .map((layer) => {
-                      const hit = hoveredHierarchy.find((h) => h.layerId === layer.id)
+                      const hit = hoveredHierarchy.find(
+                        (h) => h.layerId === layer.id,
+                      )
                       const layerDataField = dataLabelFields[layer.id] ?? null
-                      const lensValue = layerDataField && hit?.data
-                        ? (() => {
-                            const raw = hit.data[layerDataField]
-                            if (raw == null) return null
-                            const fieldCfg = (currentMap.data_field_config ?? []).find(
-                              (f) => layerDataField.startsWith(f.field)
-                            )
-                            const prefix = fieldCfg?.field.includes("revenue") ? "$" : ""
-                            if (raw >= 1_000_000) return `${prefix}${(raw / 1_000_000).toFixed(1)}M`
-                            if (raw >= 10_000) return `${prefix}${(raw / 1_000).toFixed(0)}K`
-                            if (raw >= 1_000) return `${prefix}${(raw / 1_000).toFixed(1)}K`
-                            return `${prefix}${raw.toFixed(0)}`
-                          })()
-                        : null
+                      const lensValue =
+                        layerDataField && hit?.data
+                          ? (() => {
+                              const raw = hit.data[layerDataField]
+                              if (raw == null) return null
+                              const fieldCfg = (
+                                currentMap.data_field_config ?? []
+                              ).find((f) => layerDataField.startsWith(f.field))
+                              const prefix = fieldCfg?.field.includes("revenue")
+                                ? "$"
+                                : ""
+                              if (raw >= 1_000_000)
+                                return `${prefix}${(raw / 1_000_000).toFixed(1)}M`
+                              if (raw >= 10_000)
+                                return `${prefix}${(raw / 1_000).toFixed(0)}K`
+                              if (raw >= 1_000)
+                                return `${prefix}${(raw / 1_000).toFixed(1)}K`
+                              return `${prefix}${raw.toFixed(0)}`
+                            })()
+                          : null
                       return (
-                        <div key={layer.id} className="flex items-baseline gap-2">
+                        <div
+                          key={layer.id}
+                          className="flex items-baseline gap-2"
+                        >
                           <span className="text-muted-foreground text-xs w-16 shrink-0 truncate text-right">
                             {layer.name}
                           </span>
@@ -995,7 +1032,9 @@ export default function HomePage() {
                               )}
                             </>
                           ) : (
-                            <span className="text-muted-foreground/50 text-xs">—</span>
+                            <span className="text-muted-foreground/50 text-xs">
+                              —
+                            </span>
                           )}
                         </div>
                       )

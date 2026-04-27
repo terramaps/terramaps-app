@@ -61,7 +61,9 @@ export default function ImportStep({
       })
     } else if (uploadStatusQuery.data.status === "failed") {
       setPhase("error")
-      setErrorMessage(uploadStatusQuery.data.error ?? "Failed to parse spreadsheet")
+      setErrorMessage(
+        uploadStatusQuery.data.error || "Failed to parse spreadsheet",
+      )
     }
   }, [uploadStatusQuery.data, onComplete])
 
@@ -153,7 +155,9 @@ export default function ImportStep({
           </div>
           <div className="space-y-2">
             <p className="text-lg font-semibold">
-              {phase === "uploading" ? "Uploading file…" : "Parsing spreadsheet…"}
+              {phase === "uploading"
+                ? "Uploading file…"
+                : "Parsing spreadsheet…"}
             </p>
             <p className="text-muted-foreground text-sm">
               {phase === "uploading"
@@ -175,7 +179,9 @@ export default function ImportStep({
           </div>
           <div className="space-y-2">
             <p className="text-lg font-semibold">Upload failed</p>
-            <p className="text-muted-foreground text-sm max-w-sm">{errorMessage}</p>
+            <p className="text-muted-foreground text-sm max-w-sm">
+              {errorMessage}
+            </p>
           </div>
           <Button onClick={handleRemoveFile} variant="outline">
             Try again
@@ -209,11 +215,15 @@ export default function ImportStep({
             />
             <div className="mx-auto flex flex-col items-center">
               <IconCloudUpload className="text-muted-foreground mb-4 h-16 w-16" />
-              <h3 className="mb-2 text-lg font-semibold">Upload Territory Data</h3>
+              <h3 className="mb-2 text-lg font-semibold">
+                Upload Territory Data
+              </h3>
               <p className="text-muted-foreground mb-4 text-sm">
                 Drag and drop your file here, or click to browse
               </p>
-              <Button onClick={() => fileInputRef.current?.click()}>Select File</Button>
+              <Button onClick={() => fileInputRef.current?.click()}>
+                Select File
+              </Button>
               <p className="text-muted-foreground mt-4 text-xs">
                 Supported formats: .xlsx, .ztt · Max size: {MAX_FILE_SIZE_MB}MB
               </p>
@@ -228,7 +238,11 @@ export default function ImportStep({
               <div className="flex-1 space-y-1">
                 <div className="flex items-center justify-between">
                   <h4 className="font-semibold">{selection.file.name}</h4>
-                  <Button variant="ghost" size="icon-sm" onClick={handleRemoveFile}>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={handleRemoveFile}
+                  >
                     <IconX className="h-4 w-4" />
                   </Button>
                 </div>
@@ -242,12 +256,16 @@ export default function ImportStep({
 
         {selection && selection.workbook.SheetNames.length > 1 && (
           <div className="space-y-3">
-            <h3 className="text-sm font-medium text-muted-foreground">Select Sheet</h3>
+            <h3 className="text-sm font-medium text-muted-foreground">
+              Select Sheet
+            </h3>
             <div className="flex flex-wrap gap-2">
               {selection.workbook.SheetNames.map((sheetName) => (
                 <button
                   key={sheetName}
-                  onClick={() => handleSheetSelect(sheetName)}
+                  onClick={() => {
+                    handleSheetSelect(sheetName)
+                  }}
                   className={cn(
                     "rounded-md border px-3 py-1.5 text-sm transition-colors hover:border-primary/50",
                     sheetName === selection.sheet?.[1]
@@ -264,16 +282,21 @@ export default function ImportStep({
 
         {selection?.sheet && (
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Preview — {selection.sheet[1]}</h3>
+            <h3 className="text-lg font-semibold">
+              Preview — {selection.sheet[1]}
+            </h3>
             <div className="overflow-x-auto rounded-lg border border-border">
               <Table>
                 <TableHeader>
                   <TableRow>
                     {(() => {
-                      const data = XLSX.utils.sheet_to_json(selection.sheet[0], {
-                        header: 1,
-                        defval: "",
-                      }) as unknown[][]
+                      const data = XLSX.utils.sheet_to_json<unknown[]>(
+                        selection.sheet[0],
+                        {
+                          header: 1,
+                          defval: "",
+                        },
+                      )
                       return data[0]?.map((cell, i) => (
                         <TableHead key={i}>{String(cell)}</TableHead>
                       ))
@@ -282,13 +305,16 @@ export default function ImportStep({
                 </TableHeader>
                 <TableBody>
                   {(() => {
-                    const data = XLSX.utils.sheet_to_json(selection.sheet[0], {
-                      header: 1,
-                      defval: "",
-                    }) as unknown[][]
+                    const data = XLSX.utils.sheet_to_json<unknown[]>(
+                      selection.sheet[0],
+                      {
+                        header: 1,
+                        defval: "",
+                      },
+                    )
                     return data.slice(1, PREVIEW_ROWS + 1).map((row, i) => (
                       <TableRow key={i}>
-                        {(row as unknown[]).map((cell, j) => (
+                        {row.map((cell, j) => (
                           <TableCell key={j}>{String(cell)}</TableCell>
                         ))}
                       </TableRow>
@@ -298,7 +324,11 @@ export default function ImportStep({
               </Table>
             </div>
             <div className="flex justify-end">
-              <Button onClick={handleUpload} size="lg" disabled={!selection.sheet}>
+              <Button
+                onClick={handleUpload}
+                size="lg"
+                disabled={!selection.sheet}
+              >
                 Continue
               </Button>
             </div>

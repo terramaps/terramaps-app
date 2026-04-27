@@ -10,15 +10,34 @@ type ZipQuery = components["schemas"]["ZipQuery"]
 // Local type for upload status — replace with generated path type after openapi:generate
 type UploadStatusData =
   | { document_id: string; status: "parsing" }
-  | { document_id: string; status: "ready"; headers: string[]; suggested_layers: string[]; preview_rows: (string | number | null)[][]; row_count: number; warnings: string[] }
-  | { document_id: string; status: "failed"; error: string; error_reason?: string | null }
+  | {
+      document_id: string
+      status: "ready"
+      headers: string[]
+      suggested_layers: string[]
+      preview_rows: (string | number | null)[][]
+      row_count: number
+      warnings: string[]
+    }
+  | {
+      document_id: string
+      status: "failed"
+      error: string
+      error_reason?: string | null
+    }
 
 const ACTIVE_JOB_STATUSES = new Set(["pending", "processing", "failed"])
 
 function isMapLoading(
-  data: { active_job?: { status: string } | null; import_state?: { status: string } | null } | undefined,
+  data:
+    | {
+        active_job?: { status: string } | null
+        import_state?: { status: string } | null
+      }
+    | undefined,
 ): boolean {
-  if (data?.active_job && ACTIVE_JOB_STATUSES.has(data.active_job.status)) return true
+  if (data?.active_job && ACTIVE_JOB_STATUSES.has(data.active_job.status))
+    return true
   if (data?.import_state?.status === "importing") return true
   return false
 }

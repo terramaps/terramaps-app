@@ -4,15 +4,14 @@
  * Fires onSelect with the chosen SearchResultItem so the parent can fly the
  * map to the result's centroid and open the node/zip detail sheet.
  */
-
 import { IconLoader2, IconSearch } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
 import { useEffect, useRef, useState } from "react"
 
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
-import { cn } from "@/lib/utils"
 import type { components } from "@/lib/api/v1"
+import { cn } from "@/lib/utils"
 import { queries } from "@/queries/queries"
 
 export type SearchResultItem = components["schemas"]["SearchResultItem"]
@@ -31,8 +30,12 @@ export function SearchBar({ mapId, onSelect, className }: SearchBarProps) {
 
   // 300 ms debounce — no external library needed
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedQ(rawQ), 300)
-    return () => clearTimeout(timer)
+    const timer = setTimeout(() => {
+      setDebouncedQ(rawQ)
+    }, 300)
+    return () => {
+      clearTimeout(timer)
+    }
   }, [rawQ])
 
   const searchQuery = useQuery(queries.searchMap(mapId, debouncedQ))
@@ -94,8 +97,12 @@ export function SearchBar({ mapId, onSelect, className }: SearchBarProps) {
       <PopoverContent
         className="w-80 p-0"
         align="start"
-        onOpenAutoFocus={(e) => e.preventDefault()}
-        onInteractOutside={() => setOpen(false)}
+        onOpenAutoFocus={(e) => {
+          e.preventDefault()
+        }}
+        onInteractOutside={() => {
+          setOpen(false)
+        }}
       >
         <div className="max-h-80 overflow-y-auto p-1">
           {searchQuery.isFetching && results.length === 0 && (
@@ -120,7 +127,9 @@ export function SearchBar({ mapId, onSelect, className }: SearchBarProps) {
                   key={`${item.type}-${String(item.id)}`}
                   type="button"
                   className="hover:bg-muted flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-                  onClick={() => handleSelect(item)}
+                  onClick={() => {
+                    handleSelect(item)
+                  }}
                 >
                   <span
                     className="border-border h-3 w-3 shrink-0 rounded-full border"

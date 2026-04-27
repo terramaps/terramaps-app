@@ -1,4 +1,5 @@
 import { IconCheck } from "@tabler/icons-react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useFormik } from "formik"
 import * as React from "react"
 import { useNavigate, useParams } from "react-router-dom"
@@ -17,7 +18,6 @@ import {
 import { cn } from "@/lib/utils"
 import { useCreateMapMutation } from "@/queries/mutations"
 import { queries } from "@/queries/queries"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 import DataStep from "./components/data-step"
 import ImportStep from "./components/import-step"
@@ -36,8 +36,6 @@ interface Step {
   description: string
   component: React.ReactNode
 }
-
-const WIZARD_STEPS_COUNT = 4
 
 export default function InitializePage() {
   const { documentId: urlDocumentId, mapId: urlMapId } = useParams<{
@@ -65,15 +63,17 @@ export default function InitializePage() {
   })
 
   const isProcessing = isProcessingFromUrl
-  const processingFailed = mapQuery.data?.import_state?.status === "failed"
-  const processingStep = mapQuery.data?.import_state?.step ?? "Queuing…"
+  const processingFailed = mapQuery.data?.import_state.status === "failed"
+  const processingStep = mapQuery.data?.import_state.step ?? "Queuing…"
 
   // Navigate to home once import completes
   React.useEffect(() => {
     if (!mapQuery.data) return
     if (mapQuery.data.import_state.status === "complete") {
       void queryClient.invalidateQueries({ queryKey: queries._maps() })
-      void navigate(AppRoutes.getRoute(PageName.Home, { mapId: urlMapId ?? "" }))
+      void navigate(
+        AppRoutes.getRoute(PageName.Home, { mapId: urlMapId ?? "" }),
+      )
     }
   }, [mapQuery.data, navigate, queryClient, urlMapId])
 
@@ -104,7 +104,9 @@ export default function InitializePage() {
         {
           onSuccess: (data) => {
             void navigate(
-              AppRoutes.getRoute(PageName.InitializeProcessing, { mapId: data.id }),
+              AppRoutes.getRoute(PageName.InitializeProcessing, {
+                mapId: data.id,
+              }),
             )
           },
         },
@@ -125,8 +127,8 @@ export default function InitializePage() {
     void formik.setFieldValue("previewRows", data.preview_rows)
     void formik.setFieldValue("rowCount", data.row_count)
     setActiveStepIdx(1)
-  // formik is stable; exhaustive-deps would add it but it's safe to omit
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // formik is stable; exhaustive-deps would add it but it's safe to omit
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uploadRestoreQuery.data, isRestoringUpload])
 
   const STEPS: Step[] = [
@@ -161,11 +163,15 @@ export default function InitializePage() {
         <LayerStep
           headers={formik.values.headers}
           suggestedLayers={formik.values.suggestedLayers}
-          onBack={() => setActiveStepIdx(0)}
+          onBack={() => {
+            setActiveStepIdx(0)
+          }}
           onComplete={(layers) => {
             void formik.setFieldValue(
               "layers",
-              layers.filter((l) => l.enabled).map((l) => ({ name: l.name, header: l.idField })),
+              layers
+                .filter((l) => l.enabled)
+                .map((l) => ({ name: l.name, header: l.idField })),
             )
             setActiveStepIdx(2)
           }}
@@ -180,7 +186,9 @@ export default function InitializePage() {
         <DataStep
           headers={formik.values.headers}
           layerHeaders={formik.values.layers.map((l) => l.header)}
-          onBack={() => setActiveStepIdx(1)}
+          onBack={() => {
+            setActiveStepIdx(1)
+          }}
           onComplete={(dataFields) => {
             void formik.setFieldValue("data_fields", dataFields)
             setActiveStepIdx(3)
@@ -202,8 +210,12 @@ export default function InitializePage() {
           dataFields={formik.values.data_fields}
           isSubmitting={createMapMutation.isPending}
           onNameChange={(name) => void formik.setFieldValue("name", name)}
-          onBack={() => setActiveStepIdx(2)}
-          onComplete={() => formik.handleSubmit()}
+          onBack={() => {
+            setActiveStepIdx(2)
+          }}
+          onComplete={() => {
+            formik.handleSubmit()
+          }}
         />
       ),
     },
@@ -242,10 +254,14 @@ export default function InitializePage() {
     )
   }
 
-  if (isRestoringUpload && (uploadRestoreQuery.isError || uploadRestoreQuery.data?.status === "failed")) {
-    const reason = uploadRestoreQuery.data?.status === "failed"
-      ? uploadRestoreQuery.data.error
-      : "This upload could not be loaded."
+  if (
+    isRestoringUpload &&
+    (uploadRestoreQuery.isError || uploadRestoreQuery.data?.status === "failed")
+  ) {
+    const reason =
+      uploadRestoreQuery.data?.status === "failed"
+        ? uploadRestoreQuery.data.error
+        : "This upload could not be loaded."
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="flex flex-col items-center gap-6 text-center max-w-sm">
@@ -297,12 +313,18 @@ export default function InitializePage() {
                         <div
                           className={cn(
                             "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-xs font-semibold",
-                            isCompleted && "border-primary bg-primary text-primary-foreground",
+                            isCompleted &&
+                              "border-primary bg-primary text-primary-foreground",
                             isActive && "border-primary text-primary",
-                            isUpcoming && "border-muted-foreground/30 text-muted-foreground",
+                            isUpcoming &&
+                              "border-muted-foreground/30 text-muted-foreground",
                           )}
                         >
-                          {isCompleted ? <IconCheck className="h-4 w-4" /> : index + 1}
+                          {isCompleted ? (
+                            <IconCheck className="h-4 w-4" />
+                          ) : (
+                            index + 1
+                          )}
                         </div>
                         <div className="flex-1 space-y-0.5">
                           <div
@@ -316,7 +338,9 @@ export default function InitializePage() {
                           <div
                             className={cn(
                               "text-xs leading-tight",
-                              isActive ? "text-muted-foreground" : "text-muted-foreground/70",
+                              isActive
+                                ? "text-muted-foreground"
+                                : "text-muted-foreground/70",
                             )}
                           >
                             {step.description}
@@ -336,9 +360,13 @@ export default function InitializePage() {
                     <div
                       className={cn(
                         "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-xs font-semibold",
-                        isProcessing && !processingFailed && "border-primary text-primary",
-                        !isProcessing && "border-muted-foreground/30 text-muted-foreground",
-                        processingFailed && "border-destructive text-destructive",
+                        isProcessing &&
+                          !processingFailed &&
+                          "border-primary text-primary",
+                        !isProcessing &&
+                          "border-muted-foreground/30 text-muted-foreground",
+                        processingFailed &&
+                          "border-destructive text-destructive",
                       )}
                     >
                       {STEPS.length + 1}
@@ -373,8 +401,8 @@ export default function InitializePage() {
             </h1>
             <p className="text-muted-foreground text-sm">
               {isProcessing
-                ? `Step ${STEPS.length + 1} of ${STEPS.length + 1}`
-                : `Step ${activeStepIdx + 1} of ${STEPS.length}`}
+                ? `Step ${(STEPS.length + 1).toString()} of ${(STEPS.length + 1).toString()}`
+                : `Step ${(activeStepIdx + 1).toString()} of ${STEPS.length.toString()}`}
             </p>
           </div>
         </div>
@@ -391,7 +419,8 @@ export default function InitializePage() {
                 <div className="space-y-2">
                   <p className="text-lg font-semibold">Import failed</p>
                   <p className="text-muted-foreground text-sm max-w-sm">
-                    {mapQuery.data?.import_state?.error ?? "An unexpected error occurred."}
+                    {mapQuery.data?.import_state.error ??
+                      "An unexpected error occurred."}
                   </p>
                 </div>
                 <a
@@ -409,8 +438,12 @@ export default function InitializePage() {
                 </div>
                 <div className="space-y-2">
                   <p className="text-lg font-semibold">Building your map…</p>
-                  <p className="text-muted-foreground text-sm">{processingStep}</p>
-                  <p className="text-muted-foreground/60 text-xs">This may take a minute</p>
+                  <p className="text-muted-foreground text-sm">
+                    {processingStep}
+                  </p>
+                  <p className="text-muted-foreground/60 text-xs">
+                    This may take a minute
+                  </p>
                 </div>
               </>
             )}
