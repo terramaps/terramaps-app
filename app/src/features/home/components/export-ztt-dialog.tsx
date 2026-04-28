@@ -74,8 +74,8 @@ export function ExportZttDialog({
             <DialogTitle>Export to ZTT</DialogTitle>
           </div>
           <DialogDescription>
-            Downloads an Excel spreadsheet with all assigned zip codes and their
-            full territory hierarchy — one row per zip code.
+            Downloads an Excel spreadsheet with every zip code, their territory
+            hierarchy, and any data fields — one row per zip code.
           </DialogDescription>
         </DialogHeader>
 

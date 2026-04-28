@@ -632,7 +632,7 @@ export interface paths {
          * @description Export a map's zip-to-territory hierarchy as an Excel (.xlsx) file.
          *
          *     Columns: zip_code | <layer order=1 name> | <layer order=2 name> | …
-         *     One row per assigned zip code, with the full ancestor chain filled in.
+         *     One row per zip code; territory columns are blank for unassigned zips.
          */
         get: operations["export_ztt_maps__map_id__export_ztt_get"];
         put?: never;

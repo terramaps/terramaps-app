@@ -1558,7 +1558,7 @@
           "Exports"
         ],
         "summary": "Export Ztt",
-        "description": "Export a map's zip-to-territory hierarchy as an Excel (.xlsx) file.\n\nColumns: zip_code | <layer order=1 name> | <layer order=2 name> | \u2026\nOne row per assigned zip code, with the full ancestor chain filled in.",
+        "description": "Export a map's zip-to-territory hierarchy as an Excel (.xlsx) file.\n\nColumns: zip_code | <layer order=1 name> | <layer order=2 name> | \u2026\nOne row per zip code; territory columns are blank for unassigned zips.",
         "operationId": "export_ztt_maps__map_id__export_ztt_get",
         "parameters": [
           {

@@ -10,6 +10,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from sqlalchemy import select
 
 from src.app.database import DatabaseSession
+from src.models.geography import ZipCodeGeography
 from src.models.graph import LayerModel, MapModel, NodeModel, ZipAssignmentModel
 from src.services.auth import CurrentUserDependency
 from src.services.permissions import PermissionsServiceDependency
@@ -27,7 +28,7 @@ def export_ztt(
     """Export a map's zip-to-territory hierarchy as an Excel (.xlsx) file.
 
     Columns: zip_code | <layer order=1 name> | <layer order=2 name> | …
-    One row per assigned zip code, with the full ancestor chain filled in.
+    One row per zip code; territory columns are blank for unassigned zips.
     """
     if not permission_service.check_for_map_access(
         user_id=current_user.id,
@@ -71,21 +72,32 @@ def export_ztt(
     # Layer id → layer object (for ancestor column mapping)
     layer_by_id = {la.id: la for la in upper_layers}
 
-    # All assigned zip codes for this map's zip layer
-    zip_assignments = db.execute(
-        select(ZipAssignmentModel.zip_code, ZipAssignmentModel.parent_node_id)
-        .where(ZipAssignmentModel.layer_id == zip_layer.id)
-        .where(ZipAssignmentModel.parent_node_id.isnot(None))
-        .order_by(ZipAssignmentModel.zip_code)
+    # Data field columns from map config: (jsonb_key, display_label) in config order
+    data_fields: list[tuple[str, str]] = [
+        (entry["field"], entry.get("label") or entry["field"])
+        for entry in (map_model.data_field_config or [])
+    ]
+
+    # All zip codes, left-joined with this layer's assignment info if present
+    zip_rows = db.execute(
+        select(ZipCodeGeography.zip_code, ZipAssignmentModel.parent_node_id, ZipAssignmentModel.data)
+        .outerjoin(
+            ZipAssignmentModel,
+            (ZipAssignmentModel.zip_code == ZipCodeGeography.zip_code)
+            & (ZipAssignmentModel.layer_id == zip_layer.id),
+        )
+        .order_by(ZipCodeGeography.zip_code)
     ).all()
 
-    # Build rows by walking the ancestor chain for each zip
+    # Build rows by walking the ancestor chain for each zip, then appending data fields
     ExportRow = dict[str, str]
     rows: list[ExportRow] = []
-    for za in zip_assignments:
+    for za in zip_rows:
         row: ExportRow = {"zip_code": za.zip_code}
         for ul in upper_layers:
             row[ul.name] = ""
+        for _field_key, label in data_fields:
+            row[label] = ""
 
         current_id: int | None = za.parent_node_id
         while current_id is not None:
@@ -96,6 +108,12 @@ def export_ztt(
                 row[layer_by_id[layer_id].name] = node_name
             current_id = parent_id
 
+        if za.data:
+            for field_key, label in data_fields:
+                val = za.data.get(field_key)
+                if val is not None:
+                    row[label] = str(val)
+
         rows.append(row)
 
     # ── Build Excel workbook ──────────────────────────────────────────────────
@@ -103,7 +121,7 @@ def export_ztt(
     ws = wb.active
     ws.title = map_model.name[:31]  # Excel sheet name max = 31 chars
 
-    headers = ["zip_code"] + [la.name for la in upper_layers]
+    headers = ["zip_code"] + [la.name for la in upper_layers] + [label for _, label in data_fields]
 
     header_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
     header_font = Font(bold=True, color="FFFFFF", size=10)
