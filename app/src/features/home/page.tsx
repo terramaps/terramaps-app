@@ -16,7 +16,7 @@ import {
   IconSettings,
   IconX,
 } from "@tabler/icons-react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
 import { differenceInDays, format, formatDistanceToNow } from "date-fns"
 import pluralize from "pluralize"
 import { useEffect, useMemo, useRef, useState } from "react"
@@ -89,6 +89,11 @@ import {
 } from "@/features/home/components/search-bar"
 import { SelectionSheet } from "@/features/home/components/selection-sheet"
 import {
+  ActiveMapProvider,
+  useActiveMap,
+  useLayers,
+} from "@/features/home/providers/active-map-provider"
+import {
   useLogoutMutation,
   useSpatialSelectMutation,
 } from "@/queries/mutations"
@@ -119,8 +124,11 @@ function formatLastEdited(isoDate: string | null | undefined): string {
   return `Edited ${format(date, "MMM d, yyyy")}`
 }
 
-export default function HomePage() {
+function HomePageContent() {
   const mapRef = useRef<MapRef | null>(null)
+
+  const activeMap = useActiveMap()
+  const layerList = useLayers()
 
   // Track which label fields are active per layer (ordered list shown stacked on map)
   const [labelFields, setLabelFields] = useState<Record<number, string[]>>({})
@@ -134,21 +142,25 @@ export default function HomePage() {
   const maps = useMaps()
   const me = useMe()
   const navigate = useNavigate()
-  const { mapId } = useParams<{ mapId: string }>()
-  const currentMap = maps.find((m) => m.id === mapId) ?? maps[0]
-  // Poll the current map for live job status updates (refetchInterval is 2s
-  // while a job is active, pauses automatically when idle).
-  const currentMapPolled = useQuery(queries.getMap(currentMap.id))
-  const activeJob = currentMapPolled.data?.active_job ?? currentMap.active_job
-  const importState =
-    currentMapPolled.data?.import_state ?? currentMap.import_state
+
+  const activeJob = activeMap.active_job
+  const importState = activeMap.import_state
   const isImporting = importState.status === "importing"
   const isImportFailed = importState.status === "failed"
-  const layersQuery = useQuery(queries.listLayers(currentMap.id))
+
   const [baseMap, setBaseMap] = useState<BaseMapName>("osm")
-  const [fillLayerId, setFillLayerId] = useState<number | null>(null)
-  const [borderLayerIds, setBorderLayerIds] = useState<Set<number>>(new Set())
-  const [labelLayerIds, setLabelLayerIds] = useState<Set<number>>(new Set())
+
+  // Initialize default view: second layer (index 1) if it exists, otherwise first.
+  const defaultLayer = layerList.length > 1 ? layerList[1] : layerList[0]
+  const [fillLayerId, setFillLayerId] = useState<number | null>(
+    defaultLayer?.id ?? null,
+  )
+  const [borderLayerIds, setBorderLayerIds] = useState<Set<number>>(
+    () => new Set(defaultLayer ? [defaultLayer.id] : []),
+  )
+  const [labelLayerIds, setLabelLayerIds] = useState<Set<number>>(
+    () => new Set(defaultLayer ? [defaultLayer.id] : []),
+  )
   const [currentTool, setCurrentTool] = useState<"pan" | "select">("pan")
   const logoutMutation = useLogoutMutation()
 
@@ -162,11 +174,9 @@ export default function HomePage() {
   const [exportZttOpen, setExportZttOpen] = useState(false)
 
   const [activeLayerId, setActiveLayerId] = useState<number | undefined>(
-    undefined,
+    defaultLayer?.id,
   )
-  const activeLayer = layersQuery.data?.find(
-    (layer) => layer.id === activeLayerId,
-  )
+  const activeLayer = layerList.find((layer) => layer.id === activeLayerId)
 
   // Clear selection, reset MapLibre visual state, and close all dialogs
   const clearSelection = () => {
@@ -242,11 +252,9 @@ export default function HomePage() {
   // The layer one order above the active layer — used as the parent picker target
   // for Move and Merge dialogs.
   const parentLayer = useMemo(() => {
-    if (!activeLayer || !layersQuery.data) return null
-    return (
-      layersQuery.data.find((l) => l.order === activeLayer.order + 1) ?? null
-    )
-  }, [activeLayer, layersQuery.data])
+    if (!activeLayer) return null
+    return layerList.find((l) => l.order === activeLayer.order + 1) ?? null
+  }, [activeLayer, layerList])
 
   const hasSelection = selectionCount > 0
   const isZipLayer = activeLayer?.order === 0
@@ -279,33 +287,23 @@ export default function HomePage() {
   const onActionSuccess = () => {
     clearSelection()
     void queryClient.invalidateQueries({
-      queryKey: queries.getMap(currentMap.id).queryKey,
+      queryKey: queries.getMap(activeMap.id).queryKey,
     })
-  }
-
-  if (
-    layersQuery.isSuccess &&
-    activeLayerId == null &&
-    layersQuery.data.length
-  ) {
-    setActiveLayerId(layersQuery.data[0].id)
   }
 
   const layers = useMemo(
     () =>
-      layersQuery.data
-        ? layersQuery.data.map((_layer) => ({
-            id: _layer.id,
-            order: _layer.order,
-            showFill: fillLayerId === _layer.id,
-            showOutline: borderLayerIds.has(_layer.id),
-            showLabel: labelLayerIds.has(_layer.id),
-            labelFields: labelFields[_layer.id] ?? ["name"],
-            dataLabelField: dataLabelFields[_layer.id] ?? null,
-          }))
-        : [],
+      layerList.map((_layer) => ({
+        id: _layer.id,
+        order: _layer.order,
+        showFill: fillLayerId === _layer.id,
+        showOutline: borderLayerIds.has(_layer.id),
+        showLabel: labelLayerIds.has(_layer.id),
+        labelFields: labelFields[_layer.id] ?? ["name"],
+        dataLabelField: dataLabelFields[_layer.id] ?? null,
+      })),
     [
-      layersQuery.data,
+      layerList,
       fillLayerId,
       borderLayerIds,
       labelLayerIds,
@@ -350,14 +348,14 @@ export default function HomePage() {
                       <IconHome className="h-5 w-5 shrink-0" />
                       <div className="flex-1 text-left">
                         <div className="text-sm font-medium leading-tight">
-                          {currentMap.name}
+                          {activeMap.name}
                         </div>
                         <div className="text-muted-foreground text-xs">
                           {activeJob
                             ? activeJob.status === "failed"
                               ? "Recompute failed"
                               : (activeJob.step ?? "Recomputing…")
-                            : formatLastEdited(currentMap.updated_at)}
+                            : formatLastEdited(activeMap.updated_at)}
                         </div>
                       </div>
                       {activeJob && activeJob.status !== "failed" && (
@@ -381,12 +379,6 @@ export default function HomePage() {
                         void navigate(
                           AppRoutes.getRoute(PageName.Home, { mapId: map.id }),
                         )
-                        setActiveLayerId(undefined)
-                        setFillLayerId(null)
-                        setBorderLayerIds(new Set())
-                        setLabelLayerIds(new Set())
-                        setLabelFields({})
-                        clearSelection()
                       }}
                     >
                       <IconHome className="h-4 w-4 shrink-0" />
@@ -403,7 +395,7 @@ export default function HomePage() {
                       {map.active_job && map.active_job.status !== "failed" && (
                         <IconLoader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
                       )}
-                      {map.id === currentMap.id && !map.active_job && (
+                      {map.id === activeMap.id && !map.active_job && (
                         <IconCheck className="h-4 w-4" />
                       )}
                     </DropdownMenuItem>
@@ -480,16 +472,11 @@ export default function HomePage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {layersQuery.data
-                        ? layersQuery.data.map((layer) => (
-                            <SelectItem
-                              key={layer.id}
-                              value={layer.id.toString()}
-                            >
-                              {layer.name}
-                            </SelectItem>
-                          ))
-                        : undefined}
+                      {layerList.map((layer) => (
+                        <SelectItem key={layer.id} value={layer.id.toString()}>
+                          {layer.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </SidebarGroupContent>
@@ -552,54 +539,17 @@ export default function HomePage() {
                 </SidebarGroupContent>
               </SidebarGroup>
 
-              {/* Overlays */}
-              {/* <SidebarGroup>
-              <SidebarGroupLabel>
-                Overlays
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button className="text-muted-foreground hover:text-foreground ml-auto">
-                      <IconInfoCircle className="h-3.5 w-3.5" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent side="right" className="w-80">
-                    <div className="space-y-2">
-                      <h4 className="font-semibold">Map Overlays</h4>
-                      <p className="text-muted-foreground text-sm">
-                        Add contextual data layers on top of your base map to
-                        help with territory planning and analysis.
-                      </p>
-                      <div className="text-muted-foreground text-xs">
-                        <strong>Note:</strong> Overlays may affect map
-                        performance when multiple are enabled.
-                      </div>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </SidebarGroupLabel>
-              <SidebarGroupContent>
-                <div className="space-y-2">
-                  {OVERLAYS.map((overlay) => (
-                    <label key={overlay.id} className="flex items-center gap-2">
-                      <input type="checkbox" className="rounded border-input" />
-                      <span className="text-sm">{overlay.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </SidebarGroupContent>
-            </SidebarGroup> */}
-
               {/* Layers */}
               <SidebarGroup>
                 <SidebarGroupLabel>Layers</SidebarGroupLabel>
                 <SidebarGroupContent>
                   <div className="space-y-1">
-                    {layersQuery.data?.map((layer) => {
+                    {layerList.map((layer) => {
                       const hasFill = fillLayerId === layer.id
                       const hasBorder = borderLayerIds.has(layer.id)
                       const hasLabels = labelLayerIds.has(layer.id)
                       // Build label options: "Name" plus one entry per field+aggregation combo
-                      const mapDataFields = currentMap.data_field_config ?? []
+                      const mapDataFields = activeMap.data_field_config ?? []
                       const labelFieldOptions = [
                         { value: "name", label: "Name" },
                         ...mapDataFields.flatMap((f) =>
@@ -915,7 +865,7 @@ export default function HomePage() {
           <div className="flex w-full items-center gap-4">
             <SidebarTrigger />
             <SearchBar
-              mapId={currentMap.id}
+              mapId={activeMap.id}
               onSelect={handleSearchSelect}
               className="max-w-80 w-full"
             />
@@ -930,9 +880,7 @@ export default function HomePage() {
               layers={layers}
               currentTool={currentTool}
               activeLayerId={activeLayerId}
-              tileVersion={
-                currentMapPolled.data?.tile_version ?? currentMap.tile_version
-              }
+              tileVersion={activeMap.tile_version}
               onClickSelect={handleClickSelect}
               onLassoComplete={(geojson, additive) => {
                 if (activeLayerId != null) {
@@ -980,12 +928,12 @@ export default function HomePage() {
               }}
             />
 
-            {hoveredHierarchy.length > 0 && layersQuery.data && (
+            {hoveredHierarchy.length > 0 && (
               <div
                 className={`absolute top-4 rounded-lg border bg-background/90 px-3 py-2 shadow-md backdrop-blur-sm pointer-events-none transition-[right] duration-200 ease-in-out ${hasSelection ? "right-100" : "right-4"}`}
               >
                 <div className="space-y-0.5">
-                  {[...layersQuery.data]
+                  {[...layerList]
                     .sort((a, b) => b.order - a.order)
                     .map((layer) => {
                       const hit = hoveredHierarchy.find(
@@ -998,7 +946,7 @@ export default function HomePage() {
                               const raw = hit.data[layerDataField]
                               if (raw == null) return null
                               const fieldCfg = (
-                                currentMap.data_field_config ?? []
+                                activeMap.data_field_config ?? []
                               ).find((f) => layerDataField.startsWith(f.field))
                               const prefix = fieldCfg?.field.includes("revenue")
                                 ? "$"
@@ -1165,7 +1113,7 @@ export default function HomePage() {
                         <a
                           href={AppRoutes.getRoute(
                             PageName.InitializeProcessing,
-                            { mapId: currentMap.id },
+                            { mapId: activeMap.id },
                           )}
                           className="text-sm text-primary underline underline-offset-4"
                         >
@@ -1236,13 +1184,13 @@ export default function HomePage() {
       <ExportZttDialog
         open={exportZttOpen}
         onOpenChange={setExportZttOpen}
-        mapId={currentMap.id}
-        mapName={currentMap.name}
-        layers={layersQuery.data ?? []}
+        mapId={activeMap.id}
+        mapName={activeMap.name}
+        layers={layerList}
       />
       <NodeDetailSheet
         result={detailResult}
-        layers={layersQuery.data ?? []}
+        layers={layerList}
         onClose={() => {
           setDetailResult(null)
         }}
@@ -1251,10 +1199,22 @@ export default function HomePage() {
         selectedNodeIds={selectedNodeIds}
         selectedZipCodes={selectedZipCodes}
         activeLayer={activeLayer}
-        layers={layersQuery.data ?? []}
-        dataFieldConfig={currentMap.data_field_config ?? []}
+        layers={layerList}
+        dataFieldConfig={activeMap.data_field_config ?? []}
         onClose={clearSelection}
       />
     </>
+  )
+}
+
+export default function HomePage() {
+  const maps = useMaps()
+  const { mapId } = useParams<{ mapId: string }>()
+  const currentMap = maps.find((m) => m.id === mapId) ?? maps[0]
+
+  return (
+    <ActiveMapProvider key={currentMap.id} mapId={currentMap.id}>
+      <HomePageContent />
+    </ActiveMapProvider>
   )
 }
