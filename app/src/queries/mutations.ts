@@ -193,6 +193,30 @@ export const useMoveNodesMutation = () => {
   })
 }
 
+export const useCreateNodeMutation = () => {
+  return useMutation({
+    mutationFn: async (vars: {
+      layerId: number
+      name: string
+      color: string
+      parentNodeId: number | null
+    }) => {
+      const response = await fetchClient.POST("/nodes", {
+        body: {
+          layer_id: vars.layerId,
+          name: vars.name,
+          color: vars.color,
+          parent_node_id: vars.parentNodeId,
+        },
+      })
+      if (response.response.status !== 200 || !response.data) {
+        throw new Error("Failed to create node")
+      }
+      return response.data
+    },
+  })
+}
+
 export const useMergeNodesMutation = () => {
   return useMutation({
     mutationFn: async (vars: {

@@ -3,7 +3,12 @@
  *
  * For zip layers (order=0): shows order=1 territory nodes as parent options.
  * For node layers (order≥1): shows nodes from the layer directly above.
+ *
+ * If the user types a name that doesn't exist yet and clicks "Create '…'",
+ * the dialog will create that node in the parent layer on submit, then move
+ * all selected items to it.
  */
+import { IconX } from "@tabler/icons-react"
 import pluralize from "pluralize"
 import { useState } from "react"
 
@@ -18,10 +23,13 @@ import {
 } from "@/components/ui/dialog"
 import {
   useBulkAssignZipsMutation,
+  useCreateNodeMutation,
   useMoveNodesMutation,
 } from "@/queries/mutations"
 
 import { NodePicker } from "./node-picker"
+
+const DEFAULT_NODE_COLOR = "#94a3b8"
 
 interface MoveDialogProps {
   open: boolean
@@ -47,24 +55,50 @@ export function MoveDialog({
   onSuccess,
 }: MoveDialogProps) {
   const [targetParentId, setTargetParentId] = useState<number | null>(null)
+  const [pendingCreate, setPendingCreate] = useState<string | null>(null)
 
   const moveNodesMutation = useMoveNodesMutation()
   const bulkAssignZipsMutation = useBulkAssignZipsMutation()
+  const createNodeMutation = useCreateNodeMutation()
 
   const isZipLayer = activeLayer.order === 0
   const count = isZipLayer ? selectedZipCodes.length : selectedNodeIds.length
   const itemLabel = pluralize(activeLayer.name, count)
 
   const isPending =
-    moveNodesMutation.isPending || bulkAssignZipsMutation.isPending
+    moveNodesMutation.isPending ||
+    bulkAssignZipsMutation.isPending ||
+    createNodeMutation.isPending
 
-  const handleConfirm = () => {
+  const handlePickerChange = (id: number | null) => {
+    setTargetParentId(id)
+    setPendingCreate(null)
+  }
+
+  const handleCreateRequest = (name: string) => {
+    setPendingCreate(name)
+    setTargetParentId(null)
+  }
+
+  const handleConfirm = async () => {
+    let resolvedParentId = targetParentId
+
+    if (pendingCreate && parentLayer) {
+      const newNode = await createNodeMutation.mutateAsync({
+        layerId: parentLayer.id,
+        name: pendingCreate,
+        color: DEFAULT_NODE_COLOR,
+        parentNodeId: null,
+      })
+      resolvedParentId = newNode.id
+    }
+
     if (isZipLayer) {
       bulkAssignZipsMutation.mutate(
         {
           layerId: activeLayer.id,
           zipCodes: selectedZipCodes,
-          parentNodeId: targetParentId,
+          parentNodeId: resolvedParentId,
         },
         {
           onSuccess: () => {
@@ -75,7 +109,7 @@ export function MoveDialog({
       )
     } else {
       moveNodesMutation.mutate(
-        { nodeIds: selectedNodeIds, parentNodeId: targetParentId },
+        { nodeIds: selectedNodeIds, parentNodeId: resolvedParentId },
         {
           onSuccess: () => {
             onOpenChange(false)
@@ -89,12 +123,11 @@ export function MoveDialog({
   const handleOpenChange = (next: boolean) => {
     if (!isPending) {
       setTargetParentId(null)
+      setPendingCreate(null)
       onOpenChange(next)
     }
   }
 
-  // For zip layer: parentLayer is the order=1 layer.
-  // For node layer: parentLayer is the layer one order above.
   const pickerLayerId = parentLayer?.id
 
   return (
@@ -106,17 +139,40 @@ export function MoveDialog({
           </DialogTitle>
           <DialogDescription>
             Select a new parent{parentLayer ? ` ${parentLayer.name}` : ""}, or
-            choose "No parent" to unassign.
+            choose "No parent" to unassign. Search and use "Create" to add a
+            new {parentLayer?.name.toLowerCase() ?? "node"} on the fly.
           </DialogDescription>
         </DialogHeader>
 
         {pickerLayerId != null ? (
-          <NodePicker
-            layerId={pickerLayerId}
-            value={targetParentId}
-            onChange={setTargetParentId}
-            noParentLabel="No parent (unassign)"
-          />
+          <div className="space-y-2">
+            <NodePicker
+              layerId={pickerLayerId}
+              value={targetParentId}
+              onChange={handlePickerChange}
+              noParentLabel="No parent (unassign)"
+              onCreateRequest={handleCreateRequest}
+              pendingCreate={pendingCreate}
+            />
+            {pendingCreate && (
+              <div className="bg-muted flex items-center justify-between rounded-md px-3 py-2 text-sm">
+                <span>
+                  Will create{" "}
+                  <span className="font-medium">&ldquo;{pendingCreate}&rdquo;</span>{" "}
+                  as a new {parentLayer?.name.toLowerCase()}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingCreate(null)
+                  }}
+                  className="text-muted-foreground hover:text-foreground ml-2 shrink-0"
+                >
+                  <IconX className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
         ) : (
           <p className="text-muted-foreground text-sm">
             There is no layer above this one. Moving here will orphan the
@@ -134,7 +190,7 @@ export function MoveDialog({
           >
             Cancel
           </Button>
-          <Button onClick={handleConfirm} disabled={isPending}>
+          <Button onClick={() => void handleConfirm()} disabled={isPending}>
             {isPending ? "Moving…" : "Move"}
           </Button>
         </DialogFooter>

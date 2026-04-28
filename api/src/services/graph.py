@@ -82,8 +82,13 @@ class GraphService(BaseService):
             layer_id=node_data.layer_id,
             color=node_data.color,
             parent_node_id=node_data.parent_node_id,
-            geom=None,
-            data=None,
+            data={},
+            geom_z3=None,
+            geom_z7=None,
+            geom_z11=None,
+            geom_z3_merc=None,
+            geom_z7_merc=None,
+            geom_z11_merc=None,
         )
         self.db.add(new_node)
         self.db.flush()
