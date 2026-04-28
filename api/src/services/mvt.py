@@ -74,6 +74,21 @@ def _data_column_aliases(fields: tuple[tuple[str, tuple[str, ...]], ...]) -> str
     return ",\n                " + ",\n                ".join(parts)
 
 
+def _zip_data_columns(fields: tuple[tuple[str, tuple[str, ...]], ...], alias: str) -> str:
+    """Build SELECT column SQL for zip layer — flat scalar per field (no agg suffix)."""
+    if not fields:
+        return ""
+    parts = [f"({alias}.data->>'{fname}')::numeric AS {fname}" for fname, _ in fields]
+    return ",\n                " + ",\n                ".join(parts)
+
+
+def _zip_data_column_aliases(fields: tuple[tuple[str, tuple[str, ...]], ...]) -> str:
+    """Build alias list for zip layer flat data columns."""
+    if not fields:
+        return ""
+    return ",\n                " + ",\n                ".join(fname for fname, _ in fields)
+
+
 def _node_query(col: str, data_fields: tuple[tuple[str, tuple[str, ...]], ...]) -> TextClause:
     extra = _data_columns(data_fields, "n")
     extra_aliases = _data_column_aliases(data_fields)
@@ -130,8 +145,8 @@ def _node_query(col: str, data_fields: tuple[tuple[str, tuple[str, ...]], ...]) 
 
 
 def _zip_query(col: str, data_fields: tuple[tuple[str, tuple[str, ...]], ...]) -> TextClause:
-    extra = _data_columns(data_fields, "za")
-    extra_aliases = _data_column_aliases(data_fields)
+    extra = _zip_data_columns(data_fields, "za")
+    extra_aliases = _zip_data_column_aliases(data_fields)
     return text(f"""
         WITH tile_bounds AS (
             SELECT ST_TileEnvelope(:z, :x, :y) AS geom

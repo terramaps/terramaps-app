@@ -627,35 +627,29 @@ function ZipDetailView({
                   <SectionLabel>Data</SectionLabel>
                   {za.data ? (
                     <div className="space-y-2">
-                      {dataFieldConfig.flatMap((field) =>
-                        field.aggregations.map((agg) => {
-                          const raw = (
-                            za.data?.[field.field] as
-                              | Record<string, number>
-                              | undefined
-                          )?.[agg]
-                          const formatted: string =
-                            typeof raw === "number"
-                              ? new Intl.NumberFormat().format(raw)
-                              : "—"
-                          return (
-                            <div
-                              key={`${field.field}-${agg}`}
-                              className="flex items-center justify-between gap-4"
-                            >
-                              <span className="text-muted-foreground truncate text-sm">
-                                {field.label || field.field}{" "}
-                                <span className="text-muted-foreground/60">
-                                  ({agg})
-                                </span>
-                              </span>
-                              <span className="text-sm font-medium tabular-nums">
-                                {formatted}
-                              </span>
-                            </div>
-                          )
-                        }),
-                      )}
+                      {dataFieldConfig.map((field) => {
+                        const raw = za.data?.[field.field] as
+                          | number
+                          | null
+                          | undefined
+                        const formatted: string =
+                          typeof raw === "number"
+                            ? new Intl.NumberFormat().format(raw)
+                            : "—"
+                        return (
+                          <div
+                            key={field.field}
+                            className="flex items-center justify-between gap-4"
+                          >
+                            <span className="text-muted-foreground truncate text-sm">
+                              {field.label || field.field}
+                            </span>
+                            <span className="text-sm font-medium tabular-nums">
+                              {formatted}
+                            </span>
+                          </div>
+                        )
+                      })}
                     </div>
                   ) : (
                     <div className="text-muted-foreground flex items-center gap-2 text-sm">

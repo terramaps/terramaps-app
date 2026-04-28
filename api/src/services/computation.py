@@ -126,13 +126,23 @@ class ComputationService(BaseService):
                 self._compute_data_node_layer(node_ids, number_fields)
 
     @staticmethod
-    def _data_branch(fname: str, from_clause: str, alias: str) -> str:
+    def _data_branch(fname: str, from_clause: str, alias: str, flat: bool = False) -> str:
         """Build one UNION ALL branch for a single data field.
 
         fname is pre-validated against _SAFE_FIELD_RE — no injection risk.
         from_clause is e.g. "zip_assignments za" or "nodes c".
         alias is the table alias used for column references, e.g. "za" or "c".
+        flat=True reads a scalar value directly (zip layer); flat=False reads nested {sum,avg}.
         """
+        if flat:
+            return (
+                f"SELECT {alias}.parent_node_id, '{fname}'::text AS key_name,"  # noqa: S608
+                f" SUM(({alias}.data->>'{fname}')::numeric) AS sum_val,"
+                f" AVG(({alias}.data->>'{fname}')::numeric) AS avg_val"
+                f" FROM {from_clause}"
+                f" WHERE {alias}.parent_node_id = ANY(:node_ids) AND {alias}.data ? '{fname}'"
+                f" GROUP BY {alias}.parent_node_id"
+            )
         return (
             f"SELECT {alias}.parent_node_id, '{fname}'::text AS key_name,"  # noqa: S608
             f" SUM(({alias}.data->'{fname}'->>'sum')::numeric) AS sum_val,"
@@ -143,10 +153,10 @@ class ComputationService(BaseService):
         )
 
     def _run_data_agg(
-        self, node_ids: set[int], fields: list[dict[str, Any]], from_clause: str, alias: str
+        self, node_ids: set[int], fields: list[dict[str, Any]], from_clause: str, alias: str, flat: bool = False
     ) -> None:
         branches = " UNION ALL ".join(
-            self._data_branch(f["field"], from_clause, alias) for f in fields
+            self._data_branch(f["field"], from_clause, alias, flat=flat) for f in fields
         )
         sql_str = (
             f"WITH field_aggs AS ({branches}),"  # noqa: S608
@@ -162,8 +172,8 @@ class ComputationService(BaseService):
         self.db.flush()
 
     def _compute_data_zip_layer(self, node_ids: set[int], fields: list[dict[str, Any]]) -> None:
-        """Aggregate zip_assignments.data into order=1 territory nodes."""
-        self._run_data_agg(node_ids, fields, "zip_assignments za", "za")
+        """Aggregate zip_assignments.data (flat scalars) into order=1 territory nodes."""
+        self._run_data_agg(node_ids, fields, "zip_assignments za", "za", flat=True)
 
     def _compute_data_node_layer(self, node_ids: set[int], fields: list[dict[str, Any]]) -> None:
         """Aggregate child node data into order>1 nodes."""

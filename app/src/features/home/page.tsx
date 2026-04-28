@@ -643,12 +643,17 @@ function HomePageContent() {
                                       mvtProp: null as string | null,
                                       label: "None",
                                     },
-                                    ...mapDataFields.flatMap((f) =>
-                                      f.aggregations.map((agg) => ({
-                                        mvtProp: `${f.field}_${agg}`,
-                                        label: `${f.label || f.field} (${agg})`,
-                                      })),
-                                    ),
+                                    ...(layer.order === 0
+                                      ? mapDataFields.map((f) => ({
+                                          mvtProp: f.field,
+                                          label: f.label || f.field,
+                                        }))
+                                      : mapDataFields.flatMap((f) =>
+                                          f.aggregations.map((agg) => ({
+                                            mvtProp: `${f.field}_${agg}`,
+                                            label: `${f.label || f.field} (${agg})`,
+                                          })),
+                                        )),
                                   ].map(({ mvtProp, label }) => {
                                     const isActive =
                                       (dataLabelFields[layer.id] ?? null) ===

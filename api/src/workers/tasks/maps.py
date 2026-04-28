@@ -167,7 +167,7 @@ def _insert_zip_layer(
                 raw = row.get(dc["header"])
                 if raw is not None and not (isinstance(raw, float) and pd.isna(raw)):
                     with contextlib.suppress(ValueError, TypeError):
-                        field_data[_normalize_field_key(dc["name"])] = {"sum": float(raw), "avg": float(raw)}
+                        field_data[_normalize_field_key(dc["name"])] = float(raw)
             zip_data = field_data or None
         zip_rows.append({
             "layer_id": layer_id,
