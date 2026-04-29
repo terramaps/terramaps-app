@@ -1758,7 +1758,7 @@
           "PPT Exports"
         ],
         "summary": "Generate Ppt",
-        "description": "Enqueue PPT assembly as a background job.\n\nTODO: implement Celery task that fetches slide images from S3, builds the\n.pptx with python-pptx, uploads it to S3, and sets status = \"complete\" with\npptx_s3_key. A separate GET /download endpoint will generate a presigned URL.",
+        "description": "Build and stream the .pptx territory report.\n\nFetches slide images from S3 one at a time, assembles the presentation\nwith python-pptx, and streams the result back to the caller.",
         "operationId": "generate_ppt_maps__map_id__exports_ppt__export_id__generate_post",
         "parameters": [
           {
@@ -1781,17 +1781,11 @@
           }
         ],
         "responses": {
-          "202": {
+          "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Generate Ppt Maps  Map Id  Exports Ppt  Export Id  Generate Post"
-                }
+                "schema": {}
               }
             }
           },

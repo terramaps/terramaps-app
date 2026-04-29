@@ -13,6 +13,7 @@ Routes:
 import uuid
 
 from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 
 from src.app.database import DatabaseSession
@@ -21,6 +22,7 @@ from src.models.graph import MapModel
 from src.schemas.exports import CreateExportResponse, NextSlideResponse
 from src.services.auth import CurrentUserDependency
 from src.services.permissions import PermissionsServiceDependency
+from src.services.ppt_builder import build_pptx_chunks
 from src.services.ppt_exports import PptExportServiceDependency
 from src.services.s3 import S3ServiceDependency
 
@@ -176,19 +178,19 @@ def upload_slide(
     db.commit()
 
 
-@ppt_exports_router.post("/{map_id}/exports/ppt/{export_id}/generate", status_code=202)
+@ppt_exports_router.post("/{map_id}/exports/ppt/{export_id}/generate")
 def generate_ppt(
     map_id: str,
     export_id: str,
     db: DatabaseSession,
     current_user: CurrentUserDependency,
     permission_service: PermissionsServiceDependency,
-) -> dict[str, str]:
-    """Enqueue PPT assembly as a background job.
+    s3: S3ServiceDependency,
+) -> StreamingResponse:
+    """Build and stream the .pptx territory report.
 
-    TODO: implement Celery task that fetches slide images from S3, builds the
-    .pptx with python-pptx, uploads it to S3, and sets status = "complete" with
-    pptx_s3_key. A separate GET /download endpoint will generate a presigned URL.
+    Fetches slide images from S3 one at a time, assembles the presentation
+    with python-pptx, and streams the result back to the caller.
     """
     if not permission_service.check_for_map_access(user_id=current_user.id, map_id=map_id, map_roles=["OWNER"]):
         raise HTTPException(status_code=404, detail="Map not found")
@@ -208,7 +210,27 @@ def generate_ppt(
     if any_missing:
         raise HTTPException(status_code=409, detail="Not all slides have been uploaded yet.")
 
-    raise HTTPException(status_code=501, detail="PPT generation worker not yet implemented.")
+    slides = (
+        db.execute(
+            select(MapExportSlideModel)
+            .where(MapExportSlideModel.export_id == export_id)
+            .order_by(MapExportSlideModel.order)
+        )
+        .scalars()
+        .all()
+    )
+
+    map_model = db.get(MapModel, map_id)
+    filename = f"{map_model.name} Territory Report.pptx" if map_model else "Territory Report.pptx"
+
+    export.status = "complete"
+    db.commit()
+
+    return StreamingResponse(
+        build_pptx_chunks(slides, s3),
+        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @ppt_exports_router.delete("/{map_id}/exports/ppt/{export_id}", status_code=204)

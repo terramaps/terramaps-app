@@ -725,11 +725,10 @@ export interface paths {
         put?: never;
         /**
          * Generate Ppt
-         * @description Enqueue PPT assembly as a background job.
+         * @description Build and stream the .pptx territory report.
          *
-         *     TODO: implement Celery task that fetches slide images from S3, builds the
-         *     .pptx with python-pptx, uploads it to S3, and sets status = "complete" with
-         *     pptx_s3_key. A separate GET /download endpoint will generate a presigned URL.
+         *     Fetches slide images from S3 one at a time, assembles the presentation
+         *     with python-pptx, and streams the result back to the caller.
          */
         post: operations["generate_ppt_maps__map_id__exports_ppt__export_id__generate_post"];
         delete?: never;
@@ -2750,14 +2749,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            202: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

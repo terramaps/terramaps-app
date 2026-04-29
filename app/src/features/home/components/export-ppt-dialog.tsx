@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Progress } from "@/components/ui/progress"
+
 import type { BaseMapName, LayerViewOptions } from "./map/config"
 import { updateLayers } from "./map/utils"
 
@@ -28,7 +29,7 @@ interface ExportPptDialogProps {
   baseMap: BaseMapName
 }
 
-type State = "idle" | "running" | "done" | "error"
+type State = "idle" | "running" | "building" | "done" | "error"
 
 interface SlideProgress {
   order: number
@@ -45,11 +46,17 @@ function navigateAndWait(
   maxLat: number,
 ): Promise<void> {
   return new Promise((resolve) => {
-    map.fitBounds([[minLng, minLat], [maxLng, maxLat]], {
-      padding: 60,
-      duration: 800,
-      maxZoom: 12,
-    })
+    map.fitBounds(
+      [
+        [minLng, minLat],
+        [maxLng, maxLat],
+      ],
+      {
+        padding: 60,
+        duration: 800,
+        maxZoom: 12,
+      },
+    )
     // After a frame, check whether the map is still moving before waiting for idle.
     // If it's already settled (same bbox), resolve immediately.
     requestAnimationFrame(() => {
@@ -64,11 +71,9 @@ function navigateAndWait(
 
 function captureCanvas(map: MaplibreMap): Promise<Blob> {
   return new Promise((resolve, reject) => {
-    map.getCanvas().toBlob(
-      (blob) =>
-        blob ? resolve(blob) : reject(new Error("Canvas capture failed")),
-      "image/png",
-    )
+    map.getCanvas().toBlob((blob) => {
+      blob ? resolve(blob) : reject(new Error("Canvas capture failed"))
+    }, "image/png")
   })
 }
 
@@ -103,6 +108,18 @@ export function ExportPptDialog({
     setState("running")
     setError(null)
     setSlide(null)
+
+    const map = mapRef.current?.getMap()
+    const container = map?.getContainer()
+    const prevSize = container
+      ? { w: container.style.width, h: container.style.height }
+      : null
+
+    if (container && map) {
+      container.style.width = "1280px"
+      container.style.height = "960px"
+      map.resize()
+    }
 
     try {
       const base = config.get("api_base_url")
@@ -193,9 +210,7 @@ export function ExportPptDialog({
         }
 
         // Capture the actual map canvas
-        const blob = map
-          ? await captureCanvas(map)
-          : await fallbackBlob()
+        const blob = map ? await captureCanvas(map) : await fallbackBlob()
 
         const formData = new FormData()
         formData.append("image", blob, "screenshot.png")
@@ -211,13 +226,37 @@ export function ExportPptDialog({
         }
       }
 
+      setState("building")
+      clearExportParam()
+
+      const generateRes = await fetch(
+        `${base}/maps/${mapId}/exports/ppt/${exportId}/generate`,
+        { method: "POST", credentials: "include" },
+      )
+      if (!generateRes.ok) {
+        throw new Error(`Failed to generate report (${generateRes.status})`)
+      }
+
+      const pptxBlob = await generateRes.blob()
+      const url = URL.createObjectURL(pptxBlob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `${mapId} Territory Report.pptx`
+      a.click()
+      URL.revokeObjectURL(url)
+
       setState("done")
       setSlide((prev) => (prev ? { ...prev, uploaded: totalSlides } : null))
-      clearExportParam()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.")
       setState("error")
       clearExportParam()
+    } finally {
+      if (container && map && prevSize) {
+        container.style.width = prevSize.w
+        container.style.height = prevSize.h
+        map.resize()
+      }
     }
   }
 
@@ -254,42 +293,54 @@ export function ExportPptDialog({
           </div>
         )}
 
-        {(state === "running" || state === "done") && slide && (
-          <div className="space-y-3">
-            <Progress
-              value={state === "done" ? 100 : progressPct}
-              className="h-2"
-            />
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>
-                {state === "done" ? slide.total : slide.uploaded} of{" "}
-                {slide.total} slides
-              </span>
-              {state === "running" && (
-                <IconLoader2 className="h-3.5 w-3.5 animate-spin" />
-              )}
-              {state === "done" && (
-                <IconCheck className="h-3.5 w-3.5 text-green-500" />
-              )}
+        {(state === "running" || state === "building" || state === "done") &&
+          slide && (
+            <div className="space-y-3">
+              <Progress
+                value={
+                  state === "done"
+                    ? 100
+                    : state === "building"
+                      ? 99
+                      : progressPct
+                }
+                className="h-2"
+              />
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  {state === "done" ? slide.total : slide.uploaded} of{" "}
+                  {slide.total} slides
+                </span>
+                {(state === "running" || state === "building") && (
+                  <IconLoader2 className="h-3.5 w-3.5 animate-spin" />
+                )}
+                {state === "done" && (
+                  <IconCheck className="h-3.5 w-3.5 text-green-500" />
+                )}
+              </div>
+              <div className="rounded-lg border bg-muted/30 px-3.5 py-3">
+                <p className="mb-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {state === "building"
+                    ? "Building report"
+                    : state === "done"
+                      ? "Last slide"
+                      : "Capturing"}
+                </p>
+                <p className="text-sm font-medium leading-snug">
+                  {slide.title}
+                </p>
+                {state !== "building" && (
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Slide {slide.order + 1} of {slide.total}
+                  </p>
+                )}
+              </div>
             </div>
-            <div className="rounded-lg border bg-muted/30 px-3.5 py-3">
-              <p className="mb-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {state === "done" ? "Last slide" : "Capturing"}
-              </p>
-              <p className="text-sm font-medium leading-snug">{slide.title}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Slide {slide.order + 1} of {slide.total}
-              </p>
-            </div>
-          </div>
-        )}
+          )}
 
         {state === "done" && (
           <p className="text-sm text-muted-foreground">
-            All slides captured.{" "}
-            <span className="text-muted-foreground/60">
-              (PPT generation coming soon)
-            </span>
+            Your PowerPoint report has been downloaded.
           </p>
         )}
 
@@ -300,16 +351,21 @@ export function ExportPptDialog({
         <DialogFooter>
           {state === "idle" && (
             <>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  onOpenChange(false)
+                }}
+              >
                 Cancel
               </Button>
               <Button onClick={() => void handleExport()}>Start Export</Button>
             </>
           )}
-          {state === "running" && (
+          {(state === "running" || state === "building") && (
             <Button variant="outline" disabled>
               <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
-              Running…
+              {state === "building" ? "Building…" : "Running…"}
             </Button>
           )}
           {(state === "done" || state === "error") && (
@@ -344,10 +400,8 @@ function fallbackBlob(): Promise<Blob> {
   ctx.fillStyle = "#94a3b8"
   ctx.fillRect(0, 0, 1, 1)
   return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) =>
-        blob ? resolve(blob) : reject(new Error("canvas.toBlob failed")),
-      "image/png",
-    )
+    canvas.toBlob((blob) => {
+      blob ? resolve(blob) : reject(new Error("canvas.toBlob failed"))
+    }, "image/png")
   })
 }
