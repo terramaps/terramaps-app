@@ -33,16 +33,17 @@ _FILTER_BOUNDS_CTE = """
 
 def extract_data_fields(
     config: list[dict[str, Any]] | None,
-) -> tuple[tuple[str, tuple[str, ...]], ...]:
+) -> tuple[tuple[str, tuple[str, ...], int], ...]:
     if not config:
         return ()
-    result: list[tuple[str, tuple[str, ...]]] = []
+    result: list[tuple[str, tuple[str, ...], int]] = []
     for f in config:
         fname = str(f.get("field", ""))
         raw_aggs: list[Any] = list(f.get("aggregations") or [])
         aggs: tuple[str, ...] = tuple(str(a) for a in raw_aggs if _SAFE_AGG_RE.match(str(a)))
+        precision: int = max(1, min(4, int(f.get("precision", 4))))
         if _SAFE_FIELD_RE.match(fname) and aggs:
-            result.append((fname, aggs))
+            result.append((fname, aggs, precision))
     return tuple(result)
 
 
@@ -54,43 +55,77 @@ def pick_zoom_col(z: int) -> str:
     return "geom_z11"
 
 
-def _data_columns(fields: tuple[tuple[str, tuple[str, ...]], ...], alias: str) -> str:
+_SEP = ",\n                "
+
+
+def _data_columns(fields: tuple[tuple[str, tuple[str, ...], int], ...], alias: str) -> str:
+    """Numeric columns for the fill/feature tile layer (used by MapLibre style expressions)."""
     if not fields:
         return ""
     parts: list[str] = []
-    for fname, aggs in fields:
+    for fname, aggs, _ in fields:
         for agg in aggs:
             parts.append(f"({alias}.data->'{fname}'->>'{agg}')::numeric AS {fname}_{agg}")
-    return ",\n                " + ",\n                ".join(parts)
+    return _SEP + _SEP.join(parts)
 
 
-def _data_column_aliases(fields: tuple[tuple[str, tuple[str, ...]], ...]) -> str:
+def _label_data_columns(fields: tuple[tuple[str, tuple[str, ...], int], ...], alias: str) -> str:
+    """Text columns for the label tile layer — rounded to field precision, trailing zeros stripped."""
     if not fields:
         return ""
     parts: list[str] = []
-    for fname, aggs in fields:
+    for fname, aggs, precision in fields:
+        for agg in aggs:
+            raw = f"({alias}.data->'{fname}'->>'{agg}')::numeric"
+            parts.append(
+                f"TRIM(TRAILING '0' FROM TRIM(TRAILING '.' FROM ROUND({raw}, {precision})::text))"
+                f" AS {fname}_{agg}"
+            )
+    return _SEP + _SEP.join(parts)
+
+
+def _data_column_aliases(fields: tuple[tuple[str, tuple[str, ...], int], ...]) -> str:
+    if not fields:
+        return ""
+    parts: list[str] = []
+    for fname, aggs, _ in fields:
         for agg in aggs:
             parts.append(f"{fname}_{agg}")
-    return ",\n                " + ",\n                ".join(parts)
+    return _SEP + _SEP.join(parts)
 
 
-def _zip_data_columns(fields: tuple[tuple[str, tuple[str, ...]], ...], alias: str) -> str:
-    """Build SELECT column SQL for zip layer — flat scalar per field (no agg suffix)."""
+def _zip_data_columns(fields: tuple[tuple[str, tuple[str, ...], int], ...], alias: str) -> str:
+    """Numeric columns for zip fill layer."""
     if not fields:
         return ""
-    parts = [f"({alias}.data->>'{fname}')::numeric AS {fname}" for fname, _ in fields]
-    return ",\n                " + ",\n                ".join(parts)
+    parts = [f"({alias}.data->>'{fname}')::numeric AS {fname}" for fname, _, _p in fields]
+    return _SEP + _SEP.join(parts)
 
 
-def _zip_data_column_aliases(fields: tuple[tuple[str, tuple[str, ...]], ...]) -> str:
-    """Build alias list for zip layer flat data columns."""
+def _label_zip_data_columns(fields: tuple[tuple[str, tuple[str, ...], int], ...], alias: str) -> str:
+    """Text columns for zip label layer — rounded, trailing zeros stripped."""
     if not fields:
         return ""
-    return ",\n                " + ",\n                ".join(fname for fname, _ in fields)
+    parts: list[str] = []
+    for fname, _, precision in fields:
+        raw = f"({alias}.data->>'{fname}')::numeric"
+        parts.append(
+            f"TRIM(TRAILING '0' FROM TRIM(TRAILING '.' FROM ROUND({raw}, {precision})::text))"
+            f" AS {fname}"
+        )
+    return _SEP + _SEP.join(parts)
 
 
-def _node_query(col: str, data_fields: tuple[tuple[str, tuple[str, ...]], ...]) -> TextClause:
-    extra = _data_columns(data_fields, "n")
+def _zip_data_column_aliases(fields: tuple[tuple[str, tuple[str, ...], int], ...]) -> str:
+    """Alias list for zip layer flat data columns."""
+    if not fields:
+        return ""
+    return _SEP + _SEP.join(fname for fname, _, _p in fields)
+
+
+def _node_query(col: str, data_fields: tuple[tuple[str, tuple[str, ...], int], ...]) -> TextClause:
+    extra_numeric = _data_columns(data_fields, "n")
+    extra_label = _label_data_columns(data_fields, "n")
     extra_aliases = _data_column_aliases(data_fields)
     return text(f"""
         WITH tile_bounds AS (
@@ -102,7 +137,7 @@ def _node_query(col: str, data_fields: tuple[tuple[str, tuple[str, ...]], ...]) 
                 n.id,
                 n.name,
                 n.color,
-                n.parent_node_id{extra},
+                n.parent_node_id{extra_numeric},
                 ST_AsMVTGeom(
                     n.{col}_merc,
                     (SELECT geom FROM tile_bounds),
@@ -118,7 +153,7 @@ def _node_query(col: str, data_fields: tuple[tuple[str, tuple[str, ...]], ...]) 
                 n.id,
                 n.name,
                 n.color,
-                n.parent_node_id{extra},
+                n.parent_node_id{extra_label},
                 ST_PointOnSurface(n.{col}_merc) AS pt
             FROM nodes n
             WHERE n.layer_id = :layer_id
@@ -147,8 +182,9 @@ def _node_query(col: str, data_fields: tuple[tuple[str, tuple[str, ...]], ...]) 
     """)  # noqa: S608
 
 
-def _zip_query(col: str, data_fields: tuple[tuple[str, tuple[str, ...]], ...]) -> TextClause:
-    extra = _zip_data_columns(data_fields, "za")
+def _zip_query(col: str, data_fields: tuple[tuple[str, tuple[str, ...], int], ...]) -> TextClause:
+    extra_numeric = _zip_data_columns(data_fields, "za")
+    extra_label = _label_zip_data_columns(data_fields, "za")
     extra_aliases = _zip_data_column_aliases(data_fields)
     return text(f"""
         WITH tile_bounds AS (
@@ -159,7 +195,7 @@ def _zip_query(col: str, data_fields: tuple[tuple[str, tuple[str, ...]], ...]) -
             SELECT
                 gz.zip_code,
                 COALESCE(za.color, '#FFFFFF') AS color,
-                za.parent_node_id{extra},
+                za.parent_node_id{extra_numeric},
                 ST_AsMVTGeom(
                     gz.{col}_merc,
                     (SELECT geom FROM tile_bounds),
@@ -176,7 +212,7 @@ def _zip_query(col: str, data_fields: tuple[tuple[str, tuple[str, ...]], ...]) -
             SELECT
                 gz.zip_code,
                 COALESCE(za.color, '#FFFFFF') AS color,
-                za.parent_node_id{extra},
+                za.parent_node_id{extra_label},
                 ST_PointOnSurface(gz.{col}_merc) AS pt
             FROM geography_zip_codes gz
             LEFT JOIN zip_assignments za

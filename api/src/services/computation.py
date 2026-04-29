@@ -126,27 +126,32 @@ class ComputationService(BaseService):
                 self._compute_data_node_layer(node_ids, number_fields)
 
     @staticmethod
-    def _data_branch(fname: str, from_clause: str, alias: str, flat: bool = False) -> str:
+    def _data_branch(fname: str, from_clause: str, alias: str, flat: bool = False, precision: int = 4) -> str:
         """Build one UNION ALL branch for a single data field.
 
         fname is pre-validated against _SAFE_FIELD_RE — no injection risk.
         from_clause is e.g. "zip_assignments za" or "nodes c".
         alias is the table alias used for column references, e.g. "za" or "c".
-        flat=True reads a scalar value directly (zip layer); flat=False reads nested {sum,avg}.
+        flat=True reads a scalar value directly (zip layer); flat=False reads nested {sum,avg,min,max}.
+        precision controls ROUND() applied to sum and avg before storage (min/max preserve full precision).
         """
         if flat:
             return (
                 f"SELECT {alias}.parent_node_id, '{fname}'::text AS key_name,"  # noqa: S608
-                f" SUM(({alias}.data->>'{fname}')::numeric) AS sum_val,"
-                f" AVG(({alias}.data->>'{fname}')::numeric) AS avg_val"
+                f" ROUND(SUM(({alias}.data->>'{fname}')::numeric), {precision}) AS sum_val,"
+                f" ROUND(AVG(({alias}.data->>'{fname}')::numeric), {precision}) AS avg_val,"
+                f" MIN(({alias}.data->>'{fname}')::numeric) AS min_val,"
+                f" MAX(({alias}.data->>'{fname}')::numeric) AS max_val"
                 f" FROM {from_clause}"
                 f" WHERE {alias}.parent_node_id = ANY(:node_ids) AND {alias}.data ? '{fname}'"
                 f" GROUP BY {alias}.parent_node_id"
             )
         return (
             f"SELECT {alias}.parent_node_id, '{fname}'::text AS key_name,"  # noqa: S608
-            f" SUM(({alias}.data->'{fname}'->>'sum')::numeric) AS sum_val,"
-            f" AVG(({alias}.data->'{fname}'->>'avg')::numeric) AS avg_val"
+            f" ROUND(SUM(({alias}.data->'{fname}'->>'sum')::numeric), {precision}) AS sum_val,"
+            f" ROUND(AVG(({alias}.data->'{fname}'->>'avg')::numeric), {precision}) AS avg_val,"
+            f" MIN(({alias}.data->'{fname}'->>'min')::numeric) AS min_val,"
+            f" MAX(({alias}.data->'{fname}'->>'max')::numeric) AS max_val"
             f" FROM {from_clause}"
             f" WHERE {alias}.parent_node_id = ANY(:node_ids) AND {alias}.data ? '{fname}'"
             f" GROUP BY {alias}.parent_node_id"
@@ -156,13 +161,14 @@ class ComputationService(BaseService):
         self, node_ids: set[int], fields: list[dict[str, Any]], from_clause: str, alias: str, flat: bool = False
     ) -> None:
         branches = " UNION ALL ".join(
-            self._data_branch(f["field"], from_clause, alias, flat=flat) for f in fields
+            self._data_branch(f["field"], from_clause, alias, flat=flat, precision=f.get("precision", 4))
+            for f in fields
         )
         sql_str = (
             f"WITH field_aggs AS ({branches}),"  # noqa: S608
             " node_data AS ("
             "   SELECT parent_node_id,"
-            "          jsonb_object_agg(key_name, jsonb_build_object('sum', sum_val, 'avg', avg_val)) AS data"
+            "          jsonb_object_agg(key_name, jsonb_build_object('sum', sum_val, 'avg', avg_val, 'min', min_val, 'max', max_val)) AS data"
             "   FROM field_aggs GROUP BY parent_node_id"
             " )"
             " UPDATE nodes n SET data = nd.data"

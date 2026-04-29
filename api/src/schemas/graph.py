@@ -22,7 +22,9 @@ class DataFieldConfig(BaseModel):
     label: str = ""
     """Display name shown in the UI. Defaults to field if not set."""
     type: Literal["text", "number"]
-    aggregations: list[Literal["sum", "avg"]]
+    aggregations: list[Literal["sum", "avg", "min", "max"]]
+    precision: int = 4
+    """Max decimal places for display (1–4). Computed from source zip data at import time."""
 
     @staticmethod
     def create(config: dict[Any, Any]) -> "DataFieldConfig":
@@ -31,6 +33,7 @@ class DataFieldConfig(BaseModel):
             label=config.get("label", config["field"]),
             type=config["type"],
             aggregations=config.get("aggregations", []),
+            precision=config.get("precision", 4),
         )
 
 

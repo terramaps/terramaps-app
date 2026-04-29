@@ -11,6 +11,7 @@ from typing import Any
 import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.orm.attributes import flag_modified
 
 from src.models.geography import ZipCodeGeography
 from src.models.graph import LayerModel, MapModel, NodeModel, ZipAssignmentModel
@@ -60,6 +61,31 @@ def _normalize_cell(x: object) -> object:
 def _normalize_field_key(name: str) -> str:
     key = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
     return key or "field"
+
+
+def _compute_field_precisions(df: pd.DataFrame, number_fields: list[dict[str, Any]]) -> dict[str, int]:
+    """Return max decimal places per field key, clamped to [1, 4].
+
+    Scans source zip values to find the most precise representation used, so
+    that aggregated labels never show more decimal places than the raw data warrants,
+    but always show at least 1 so averaged integers remain meaningful (e.g. 1.5).
+    """
+    precisions: dict[str, int] = {}
+    for dc in number_fields:
+        header = dc["header"]
+        if header not in df.columns:
+            continue
+        field_key = _normalize_field_key(dc["name"])
+        max_dec = 0
+        for val in df[header].dropna():
+            try:
+                s = f"{float(val):.10f}".rstrip("0")
+                if "." in s:
+                    max_dec = max(max_dec, len(s.split(".")[1]))
+            except (ValueError, TypeError):
+                pass
+        precisions[field_key] = min(4, max(1, max_dec))
+    return precisions
 
 
 def _set_import_step(task: DatabaseTask, upload: MapUploadModel, step: str) -> None:
@@ -246,6 +272,17 @@ def import_map_task(self: DatabaseTask, map_id: str) -> None:  # type: ignore[mi
             key=lambda x: x[1],
         )
         number_fields = [dc for dc in data_field_cfgs if dc.get("type") == "number" and dc.get("aggregations")]
+
+        precisions = _compute_field_precisions(df, number_fields)
+        if precisions and map_model.data_field_config:
+            updated_config = []
+            for entry in map_model.data_field_config:
+                e = dict(entry)
+                if e.get("field") in precisions:
+                    e["precision"] = precisions[e["field"]]
+                updated_config.append(e)
+            map_model.data_field_config = updated_config
+            flag_modified(map_model, "data_field_config")
 
         previous_header: str | None = None
         previous_nodes: pd.DataFrame | None = None

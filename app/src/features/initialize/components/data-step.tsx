@@ -36,6 +36,8 @@ const AGGREGATION_OPTIONS: {
 }[] = [
   { value: "sum", label: "Sum", description: "Add all values together" },
   { value: "avg", label: "Average", description: "Calculate mean value" },
+  { value: "min", label: "Min", description: "Smallest value" },
+  { value: "max", label: "Max", description: "Largest value" },
 ]
 
 export default function DataStep({

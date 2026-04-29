@@ -955,7 +955,12 @@ export interface components {
              */
             type: "text" | "number";
             /** Aggregations */
-            aggregations: ("sum" | "avg")[];
+            aggregations: ("sum" | "avg" | "min" | "max")[];
+            /**
+             * Precision
+             * @default 4
+             */
+            precision: number;
         };
         /**
          * DataFieldSetup
@@ -975,7 +980,7 @@ export interface components {
              * Aggregations
              * @default []
              */
-            aggregations: ("sum" | "avg")[];
+            aggregations: ("sum" | "avg" | "min" | "max")[];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
