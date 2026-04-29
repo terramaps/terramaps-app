@@ -1593,6 +1593,266 @@
         }
       }
     },
+    "/maps/{map_id}/exports/ppt": {
+      "post": {
+        "tags": [
+          "PPT Exports"
+        ],
+        "summary": "Create Ppt Export",
+        "description": "Create a new PPT export session.\n\nCancels any existing non-complete export for this map, then traverses the\nnode hierarchy to pre-compute all slide records. Bbox computation is deferred\nto GET /next so this returns immediately.",
+        "operationId": "create_ppt_export_maps__map_id__exports_ppt_post",
+        "parameters": [
+          {
+            "name": "map_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Map Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateExportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maps/{map_id}/exports/ppt/{export_id}/next": {
+      "get": {
+        "tags": [
+          "PPT Exports"
+        ],
+        "summary": "Get Next Slide",
+        "description": "Return the next slide capture instruction.\n\nFinds the lowest-order slide with no image_s3_key. Computes and persists its\nbbox on first access via PostGIS. Returns done=True once all slides have been\nuploaded.",
+        "operationId": "get_next_slide_maps__map_id__exports_ppt__export_id__next_get",
+        "parameters": [
+          {
+            "name": "map_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Map Id"
+            }
+          },
+          {
+            "name": "export_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Export Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NextSlideResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maps/{map_id}/exports/ppt/{export_id}/slides/{slide_id}": {
+      "post": {
+        "tags": [
+          "PPT Exports"
+        ],
+        "summary": "Upload Slide",
+        "description": "Upload the screenshot for a slide.\n\nStreams the image to S3 under a new UUID key and records it on the slide row.\nIdempotent: re-uploading replaces the previous S3 object.",
+        "operationId": "upload_slide_maps__map_id__exports_ppt__export_id__slides__slide_id__post",
+        "parameters": [
+          {
+            "name": "map_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Map Id"
+            }
+          },
+          {
+            "name": "export_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Export Id"
+            }
+          },
+          {
+            "name": "slide_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Slide Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_slide_maps__map_id__exports_ppt__export_id__slides__slide_id__post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maps/{map_id}/exports/ppt/{export_id}/generate": {
+      "post": {
+        "tags": [
+          "PPT Exports"
+        ],
+        "summary": "Generate Ppt",
+        "description": "Enqueue PPT assembly as a background job.\n\nTODO: implement Celery task that fetches slide images from S3, builds the\n.pptx with python-pptx, uploads it to S3, and sets status = \"complete\" with\npptx_s3_key. A separate GET /download endpoint will generate a presigned URL.",
+        "operationId": "generate_ppt_maps__map_id__exports_ppt__export_id__generate_post",
+        "parameters": [
+          {
+            "name": "map_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Map Id"
+            }
+          },
+          {
+            "name": "export_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Export Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Generate Ppt Maps  Map Id  Exports Ppt  Export Id  Generate Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maps/{map_id}/exports/ppt/{export_id}": {
+      "delete": {
+        "tags": [
+          "PPT Exports"
+        ],
+        "summary": "Cancel Ppt Export",
+        "description": "Cancel an export and delete all associated S3 files and DB rows.",
+        "operationId": "cancel_ppt_export_maps__map_id__exports_ppt__export_id__delete",
+        "parameters": [
+          {
+            "name": "map_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Map Id"
+            }
+          },
+          {
+            "name": "export_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Export Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/maps/uploads": {
       "post": {
         "tags": [
@@ -1751,6 +2011,20 @@
         "title": "AssignZip",
         "description": "Assign or update a single zip code's territory assignment.\n\nPUT with parent_node_id=null unassigns the zip (nulls the FK, preserves the row and color).\nDELETE /layers/{layer_id}/zips/{zip_code} resets the zip (removes the row entirely)."
       },
+      "Body_upload_slide_maps__map_id__exports_ppt__export_id__slides__slide_id__post": {
+        "properties": {
+          "image": {
+            "type": "string",
+            "format": "binary",
+            "title": "Image"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image"
+        ],
+        "title": "Body_upload_slide_maps__map_id__exports_ppt__export_id__slides__slide_id__post"
+      },
       "Body_upload_spreadsheet_maps_uploads_post": {
         "properties": {
           "file": {
@@ -1882,6 +2156,25 @@
         ],
         "title": "BulkUpdateNode",
         "description": "BulkUpdateNode."
+      },
+      "CreateExportResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "total_slides": {
+            "type": "integer",
+            "title": "Total Slides"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "total_slides"
+        ],
+        "title": "CreateExportResponse",
+        "description": "Returned immediately after a new export session is created."
       },
       "CreateLayer": {
         "properties": {
@@ -2193,6 +2486,16 @@
               }
             ]
           },
+          "active_export": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MapExport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "import_state": {
             "$ref": "#/components/schemas/MapImportState"
           },
@@ -2217,6 +2520,42 @@
         ],
         "title": "Map",
         "description": "Map."
+      },
+      "MapExport": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "in_progress",
+              "generating",
+              "complete",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "total_slides": {
+            "type": "integer",
+            "title": "Total Slides"
+          },
+          "uploaded_slides": {
+            "type": "integer",
+            "title": "Uploaded Slides"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "total_slides",
+          "uploaded_slides"
+        ],
+        "title": "MapExport",
+        "description": "Active PPT export session for a map."
       },
       "MapImportState": {
         "properties": {
@@ -2491,6 +2830,129 @@
         ],
         "title": "MergeNodes",
         "description": "Merge multiple nodes into a single new node.\n\nAll node_ids must belong to the same layer (order >= 1).\nChildren (child nodes or zip assignments) are reparented to the new node.\nparent_node_id must be in the layer directly above, or null."
+      },
+      "NextSlideResponse": {
+        "properties": {
+          "done": {
+            "type": "boolean",
+            "title": "Done"
+          },
+          "slide_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slide Id"
+          },
+          "order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "layer_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Layer Id"
+          },
+          "parent_node_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Node Id"
+          },
+          "bbox_min_lng": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox Min Lng"
+          },
+          "bbox_min_lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox Min Lat"
+          },
+          "bbox_max_lng": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox Max Lng"
+          },
+          "bbox_max_lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox Max Lat"
+          },
+          "total_slides": {
+            "type": "integer",
+            "title": "Total Slides"
+          },
+          "uploaded_slides": {
+            "type": "integer",
+            "title": "Uploaded Slides"
+          }
+        },
+        "type": "object",
+        "required": [
+          "done",
+          "total_slides",
+          "uploaded_slides"
+        ],
+        "title": "NextSlideResponse",
+        "description": "Returned by GET /next.\n\nWhen done=True all slide fields are None \u2014 the capture loop should stop.\nWhen done=False all slide fields are populated and the frontend should\ncapture + upload the described screenshot."
       },
       "Node": {
         "properties": {

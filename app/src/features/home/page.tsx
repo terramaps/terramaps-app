@@ -73,6 +73,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { DeleteDialog } from "@/features/home/components/delete-dialog"
+import { ExportPptDialog } from "@/features/home/components/export-ppt-dialog"
 import { ExportZttDialog } from "@/features/home/components/export-ztt-dialog"
 import {
   type ClickSelectResult,
@@ -169,6 +170,7 @@ function HomePageContent() {
   const [mergeOpen, setMergeOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [exportZttOpen, setExportZttOpen] = useState(false)
+  const [exportPptOpen, setExportPptOpen] = useState(false)
 
   const [activeLayerId, setActiveLayerId] = useState<number | undefined>(
     defaultLayer?.id,
@@ -713,24 +715,23 @@ function HomePageContent() {
                       <IconChevronRight className="text-muted-foreground/40 h-3.5 w-3.5 shrink-0 transition-colors group-hover:text-muted-foreground" />
                     </button>
 
-                    <div className="group flex w-full cursor-not-allowed items-center gap-3 rounded-md border border-dashed p-2.5 opacity-45">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                    <button
+                      onClick={() => setExportPptOpen(true)}
+                      className="group flex w-full items-center gap-3 rounded-md border bg-card p-2.5 text-left transition-colors hover:bg-accent hover:border-accent-foreground/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                         <IconPresentation className="h-3.5 w-3.5" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <div className="text-xs font-medium leading-tight">
-                            Territory Report
-                          </div>
-                          <span className="bg-muted text-muted-foreground rounded-full px-1.5 py-px text-[9px] font-semibold uppercase leading-none tracking-wide">
-                            Soon
-                          </span>
+                        <div className="text-xs font-medium leading-tight">
+                          Territory Report
                         </div>
                         <div className="text-muted-foreground mt-0.5 text-[11px] leading-tight">
                           PowerPoint slide deck
                         </div>
                       </div>
-                    </div>
+                      <IconChevronRight className="text-muted-foreground/40 h-3.5 w-3.5 shrink-0 transition-colors group-hover:text-muted-foreground" />
+                    </button>
                   </div>
                 </SidebarGroupContent>
               </SidebarGroup>
@@ -1131,6 +1132,15 @@ function HomePageContent() {
         mapId={activeMap.id}
         mapName={activeMap.name}
         layers={layerList}
+      />
+      <ExportPptDialog
+        open={exportPptOpen}
+        onOpenChange={setExportPptOpen}
+        mapId={activeMap.id}
+        mapName={activeMap.name}
+        mapRef={mapRef}
+        layers={layers}
+        baseMap={baseMap}
       />
       <NodeDetailSheet
         result={detailResult}

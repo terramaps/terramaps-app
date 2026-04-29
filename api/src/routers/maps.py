@@ -5,15 +5,16 @@ import re
 import uuid
 
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 
 from src.app.database import DatabaseSession
+from src.models.exports import MapExportModel, MapExportSlideModel
 from src.models.graph import LayerModel, MapModel
 from src.models.jobs import MapJobModel
 from src.models.uploads import MapUploadModel
 from src.schemas.dtos.maps import CreateMap
-from src.schemas.graph import Map, MapJob
+from src.schemas.graph import Map, MapExport, MapJob
 from src.services.auth import CurrentUserDependency
 from src.services.graph import GraphServiceDependency
 from src.services.permissions import PermissionsServiceDependency
@@ -92,7 +93,7 @@ def create_map(
 
     import_map_task.delay(new_map.id)
 
-    return Map.create(new_map, upload, active_job=None)
+    return Map.create(new_map, upload, active_job=None, active_export=None)
 
 
 @maps_router.get("", response_model=list[Map])
@@ -133,8 +134,43 @@ def list_maps(
             if job.status != "complete":
                 active_jobs[job.map_id] = MapJob.create(job)
 
+    # Latest non-complete export per map + uploaded slide count
+    active_exports: dict[str, MapExport] = {}
+    export_rows = (
+        db.execute(
+            select(MapExportModel)
+            .where(MapExportModel.map_id.in_(map_ids), MapExportModel.status != "complete")
+            .order_by(MapExportModel.map_id, MapExportModel.created_at.desc())
+        )
+        .scalars()
+        .all()
+    )
+    seen_export: set[str] = set()
+    export_ids = []
+    export_by_id: dict[str, MapExportModel] = {}
+    for export in export_rows:
+        if export.map_id not in seen_export:
+            seen_export.add(export.map_id)
+            export_ids.append(export.id)
+            export_by_id[export.id] = export
+
+    if export_ids:
+        upload_counts = db.execute(
+            select(MapExportSlideModel.export_id, func.count().label("cnt"))
+            .where(
+                MapExportSlideModel.export_id.in_(export_ids),
+                MapExportSlideModel.image_s3_key.is_not(None),
+            )
+            .group_by(MapExportSlideModel.export_id)
+        ).all()
+        counts_by_export = {row.export_id: row.cnt for row in upload_counts}
+        for export_id, export_model in export_by_id.items():
+            active_exports[export_model.map_id] = MapExport.create(
+                export_model, counts_by_export.get(export_id, 0)
+            )
+
     return [
-        Map.create(m, uploads_by_id[m.source_upload_id], active_jobs.get(m.id))
+        Map.create(m, uploads_by_id[m.source_upload_id], active_jobs.get(m.id), active_exports.get(m.id))
         for m in maps
         if m.source_upload_id and m.source_upload_id in uploads_by_id
     ]
@@ -176,4 +212,26 @@ def get_map(
     )
     active_job = MapJob.create(job_row) if job_row and job_row.status != "complete" else None
 
-    return Map.create(map_model, upload, active_job)
+    export_row = (
+        db.execute(
+            select(MapExportModel)
+            .where(MapExportModel.map_id == map_id, MapExportModel.status != "complete")
+            .order_by(MapExportModel.created_at.desc())
+            .limit(1)
+        )
+        .scalars()
+        .first()
+    )
+    active_export: MapExport | None = None
+    if export_row:
+        uploaded_count = db.execute(
+            select(func.count())
+            .select_from(MapExportSlideModel)
+            .where(
+                MapExportSlideModel.export_id == export_row.id,
+                MapExportSlideModel.image_s3_key.is_not(None),
+            )
+        ).scalar_one()
+        active_export = MapExport.create(export_row, uploaded_count)
+
+    return Map.create(map_model, upload, active_job, active_export)

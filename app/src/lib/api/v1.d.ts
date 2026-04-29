@@ -643,6 +643,121 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/maps/{map_id}/exports/ppt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Ppt Export
+         * @description Create a new PPT export session.
+         *
+         *     Cancels any existing non-complete export for this map, then traverses the
+         *     node hierarchy to pre-compute all slide records. Bbox computation is deferred
+         *     to GET /next so this returns immediately.
+         */
+        post: operations["create_ppt_export_maps__map_id__exports_ppt_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/maps/{map_id}/exports/ppt/{export_id}/next": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Next Slide
+         * @description Return the next slide capture instruction.
+         *
+         *     Finds the lowest-order slide with no image_s3_key. Computes and persists its
+         *     bbox on first access via PostGIS. Returns done=True once all slides have been
+         *     uploaded.
+         */
+        get: operations["get_next_slide_maps__map_id__exports_ppt__export_id__next_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/maps/{map_id}/exports/ppt/{export_id}/slides/{slide_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Slide
+         * @description Upload the screenshot for a slide.
+         *
+         *     Streams the image to S3 under a new UUID key and records it on the slide row.
+         *     Idempotent: re-uploading replaces the previous S3 object.
+         */
+        post: operations["upload_slide_maps__map_id__exports_ppt__export_id__slides__slide_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/maps/{map_id}/exports/ppt/{export_id}/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Ppt
+         * @description Enqueue PPT assembly as a background job.
+         *
+         *     TODO: implement Celery task that fetches slide images from S3, builds the
+         *     .pptx with python-pptx, uploads it to S3, and sets status = "complete" with
+         *     pptx_s3_key. A separate GET /download endpoint will generate a presigned URL.
+         */
+        post: operations["generate_ppt_maps__map_id__exports_ppt__export_id__generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/maps/{map_id}/exports/ppt/{export_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Cancel Ppt Export
+         * @description Cancel an export and delete all associated S3 files and DB rows.
+         */
+        delete: operations["cancel_ppt_export_maps__map_id__exports_ppt__export_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/maps/uploads": {
         parameters: {
             query?: never;
@@ -702,6 +817,14 @@ export interface components {
             parent_node_id: number | null;
             /** Color */
             color?: string | null;
+        };
+        /** Body_upload_slide_maps__map_id__exports_ppt__export_id__slides__slide_id__post */
+        Body_upload_slide_maps__map_id__exports_ppt__export_id__slides__slide_id__post: {
+            /**
+             * Image
+             * Format: binary
+             */
+            image: string;
         };
         /** Body_upload_spreadsheet_maps_uploads_post */
         Body_upload_spreadsheet_maps_uploads_post: {
@@ -763,6 +886,16 @@ export interface components {
             color: string;
             /** Id */
             id: number;
+        };
+        /**
+         * CreateExportResponse
+         * @description Returned immediately after a new export session is created.
+         */
+        CreateExportResponse: {
+            /** Id */
+            id: string;
+            /** Total Slides */
+            total_slides: number;
         };
         /**
          * CreateLayer
@@ -920,9 +1053,27 @@ export interface components {
             /** Data Field Config */
             data_field_config?: components["schemas"]["DataFieldConfig"][] | null;
             active_job?: components["schemas"]["MapJob"] | null;
+            active_export?: components["schemas"]["MapExport"] | null;
             import_state: components["schemas"]["MapImportState"];
             /** Updated At */
             updated_at?: string | null;
+        };
+        /**
+         * MapExport
+         * @description Active PPT export session for a map.
+         */
+        MapExport: {
+            /** Id */
+            id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "in_progress" | "generating" | "complete" | "failed";
+            /** Total Slides */
+            total_slides: number;
+            /** Uploaded Slides */
+            uploaded_slides: number;
         };
         /**
          * MapImportState
@@ -1037,6 +1188,40 @@ export interface components {
             name: string;
             /** Parent Node Id */
             parent_node_id: number | null;
+        };
+        /**
+         * NextSlideResponse
+         * @description Returned by GET /next.
+         *
+         *     When done=True all slide fields are None — the capture loop should stop.
+         *     When done=False all slide fields are populated and the frontend should
+         *     capture + upload the described screenshot.
+         */
+        NextSlideResponse: {
+            /** Done */
+            done: boolean;
+            /** Slide Id */
+            slide_id?: number | null;
+            /** Order */
+            order?: number | null;
+            /** Title */
+            title?: string | null;
+            /** Layer Id */
+            layer_id?: number | null;
+            /** Parent Node Id */
+            parent_node_id?: number | null;
+            /** Bbox Min Lng */
+            bbox_min_lng?: number | null;
+            /** Bbox Min Lat */
+            bbox_min_lat?: number | null;
+            /** Bbox Max Lng */
+            bbox_max_lng?: number | null;
+            /** Bbox Max Lat */
+            bbox_max_lat?: number | null;
+            /** Total Slides */
+            total_slides: number;
+            /** Uploaded Slides */
+            uploaded_slides: number;
         };
         /**
          * Node
@@ -2442,6 +2627,168 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_ppt_export_maps__map_id__exports_ppt_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                map_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateExportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_next_slide_maps__map_id__exports_ppt__export_id__next_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                map_id: string;
+                export_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextSlideResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_slide_maps__map_id__exports_ppt__export_id__slides__slide_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                map_id: string;
+                export_id: string;
+                slide_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_slide_maps__map_id__exports_ppt__export_id__slides__slide_id__post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_ppt_maps__map_id__exports_ppt__export_id__generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                map_id: string;
+                export_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_ppt_export_maps__map_id__exports_ppt__export_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                map_id: string;
+                export_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

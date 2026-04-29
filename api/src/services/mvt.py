@@ -101,7 +101,8 @@ def _node_query(col: str, data_fields: tuple[tuple[str, tuple[str, ...]], ...]) 
             SELECT
                 n.id,
                 n.name,
-                n.color{extra},
+                n.color,
+                n.parent_node_id{extra},
                 ST_AsMVTGeom(
                     n.{col}_merc,
                     (SELECT geom FROM tile_bounds),
@@ -116,7 +117,8 @@ def _node_query(col: str, data_fields: tuple[tuple[str, tuple[str, ...]], ...]) 
             SELECT
                 n.id,
                 n.name,
-                n.color{extra},
+                n.color,
+                n.parent_node_id{extra},
                 ST_PointOnSurface(n.{col}_merc) AS pt
             FROM nodes n
             WHERE n.layer_id = :layer_id
@@ -127,7 +129,8 @@ def _node_query(col: str, data_fields: tuple[tuple[str, tuple[str, ...]], ...]) 
             SELECT
                 id,
                 name,
-                color{extra_aliases},
+                color,
+                parent_node_id{extra_aliases},
                 ST_AsMVTGeom(pt, (SELECT geom FROM tile_bounds), 4096, 256, false) AS geom
             FROM label_points
             WHERE ST_Within(pt, (SELECT geom FROM tile_bounds))

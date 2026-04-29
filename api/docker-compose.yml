@@ -124,11 +124,11 @@ services:
     volumes:
       - ./src:/app/src
       - ./src/migrations/versions:/app/src/migrations/versions
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
+    # deploy:
+    # resources:
+    #   limits:
+    #     cpus: "0.5"
+    #     memory: 512M
     depends_on:
       db:
         condition: service_healthy

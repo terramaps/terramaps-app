@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, field_validator, model_validator
 
+from src.models.exports import MapExportModel
 from src.models.graph import MapModel
 from src.models.jobs import MapJobModel
 from src.schemas.uploads import MapImportState
@@ -53,6 +54,24 @@ class MapJob(BaseModel):
         )
 
 
+class MapExport(BaseModel):
+    """Active PPT export session for a map."""
+
+    id: str
+    status: Literal["pending", "in_progress", "generating", "complete", "failed"]
+    total_slides: int
+    uploaded_slides: int
+
+    @staticmethod
+    def create(export: MapExportModel, uploaded_slides: int) -> "MapExport":
+        return MapExport(
+            id=export.id,
+            status=export.status,
+            total_slides=export.total_slides,
+            uploaded_slides=uploaded_slides,
+        )
+
+
 class Map(BaseModel):
     """Map."""
 
@@ -62,18 +81,26 @@ class Map(BaseModel):
     data_field_config: list[DataFieldConfig] | None = None
     active_job: MapJob | None = None
     """Active recompute job, if any. Null during import and when idle."""
+    active_export: MapExport | None = None
+    """Active PPT export session, if any. Null when idle or after completion."""
     import_state: MapImportState
     """Import lifecycle state. Non-nullable — all maps are created via the upload flow."""
     updated_at: datetime | None = None
 
     @staticmethod
-    def create(map_model: MapModel, upload: "MapUploadModel", active_job: MapJob | None) -> "Map":
+    def create(
+        map_model: MapModel,
+        upload: "MapUploadModel",
+        active_job: MapJob | None,
+        active_export: MapExport | None = None,
+    ) -> "Map":
         return Map(
             id=map_model.id,
             name=map_model.name,
             tile_version=map_model.tile_version,
             data_field_config=map_model.data_field_config,
             active_job=active_job,
+            active_export=active_export,
             import_state=MapImportState.create(upload),
             updated_at=map_model.updated_at,
         )

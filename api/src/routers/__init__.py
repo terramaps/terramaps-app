@@ -8,6 +8,7 @@ from .exports import exports_router
 from .graph import graph_router
 from .maps import maps_router
 from .mvt import mvt_router
+from .ppt_exports import ppt_exports_router
 from .spatial import spatial_router
 from .uploads import uploads_router
 
@@ -20,6 +21,7 @@ __all__ = [
     "graph_router",
     "maps_router",
     "mvt_router",
+    "ppt_exports_router",
     "spatial_router",
     "uploads_router",
 ]
