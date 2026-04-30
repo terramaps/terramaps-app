@@ -38,41 +38,45 @@ interface SlideProgress {
   total: number
 }
 
-function navigateAndWait(
+function waitForIdle(map: MaplibreMap): Promise<void> {
+  return new Promise((resolve) => {
+    void map.once("idle", () => {
+      resolve()
+    })
+  })
+}
+
+async function navigateAndWait(
   map: MaplibreMap,
   minLng: number,
   minLat: number,
   maxLng: number,
   maxLat: number,
 ): Promise<void> {
-  return new Promise((resolve) => {
-    map.fitBounds(
-      [
-        [minLng, minLat],
-        [maxLng, maxLat],
-      ],
-      {
-        padding: 60,
-        duration: 800,
-        maxZoom: 12,
-      },
-    )
-    // Double rAF after idle ensures WebGL has committed the final frame to the
-    // canvas buffer before toBlob() runs. A single rAF isn't enough in production.
-    const afterIdle = () => {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          resolve()
-        })
-      })
-    }
+  map.fitBounds(
+    [
+      [minLng, minLat],
+      [maxLng, maxLat],
+    ],
+    {
+      padding: 60,
+      duration: 800,
+      maxZoom: 12,
+    },
+  )
 
+  // First idle: navigation + tiles + layer/paint changes have all settled in MapLibre's state.
+  await waitForIdle(map)
+  // Force one more render to flush anything still queued, then wait for it to complete.
+  // This is the key to reliable capture on slower machines.
+  map.triggerRepaint()
+  await waitForIdle(map)
+  // Double rAF lets the GPU commit the final frame to the canvas buffer before toBlob.
+  await new Promise<void>((resolve) => {
     requestAnimationFrame(() => {
-      if (map.isMoving() || map.isZooming() || !map.loaded()) {
-        void map.once("idle", afterIdle)
-      } else {
-        afterIdle()
-      }
+      requestAnimationFrame(() => {
+        resolve()
+      })
     })
   })
 }
