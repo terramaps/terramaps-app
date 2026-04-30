@@ -4,16 +4,14 @@ import { useFormik } from "formik"
 import * as React from "react"
 import { useNavigate, useParams } from "react-router-dom"
 
+import { useMaps } from "@/app/providers/me-provider/context"
 import { AppRoutes, PageName } from "@/app/routes"
-import { BrandLogo } from "@/components/brand-logo"
-import { PageLayout } from "@/components/layout"
 import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-  SidebarHeader,
 } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
 import { useCreateMapMutation } from "@/queries/mutations"
@@ -47,6 +45,8 @@ export default function InitializePage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const createMapMutation = useCreateMapMutation()
+  const maps = useMaps()
+  const hasExistingMaps = maps.length > 0
 
   // Restore mode: documentId in URL — poll the upload to re-hydrate wizard state
   const isRestoringUpload = !!urlDocumentId
@@ -286,16 +286,25 @@ export default function InitializePage() {
   // ── Main wizard / processing layout ───────────────────────────────────────
 
   return (
-    <PageLayout>
-      <PageLayout.SideNav>
-        <Sidebar>
-          <SidebarHeader className="p-4 gap-4">
-            <BrandLogo />
-          </SidebarHeader>
-          <SidebarContent>
-            <SidebarGroup>
-              <SidebarGroupLabel>Progress</SidebarGroupLabel>
-              <SidebarGroupContent>
+    <div className="flex h-screen w-full flex-col overflow-hidden">
+      <header className="border-border flex h-16 shrink-0 items-center gap-4 border-b px-4">
+        {hasExistingMaps && (
+          <button
+            onClick={() => void navigate("/")}
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            ← Back
+          </button>
+        )}
+        <h1 className="text-lg font-semibold">New Map</h1>
+      </header>
+      <div className="flex flex-1 overflow-hidden">
+        <aside className="border-border shrink-0 border-r">
+          <Sidebar collapsible="none">
+            <SidebarContent>
+              <SidebarGroup>
+                <SidebarGroupLabel>Progress</SidebarGroupLabel>
+                <SidebarGroupContent>
                 <div className="space-y-1">
                   {STEPS.map((step, index) => {
                     const isActive = !isProcessing && index === activeStepIdx
@@ -387,29 +396,14 @@ export default function InitializePage() {
                     </div>
                   </div>
                 </div>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </SidebarContent>
-        </Sidebar>
-      </PageLayout.SideNav>
-
-      <PageLayout.TopNav>
-        <div className="flex w-full items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold">
-              {isProcessing ? "Processing" : activeStep.title}
-            </h1>
-            <p className="text-muted-foreground text-sm">
-              {isProcessing
-                ? `Step ${(STEPS.length + 1).toString()} of ${(STEPS.length + 1).toString()}`
-                : `Step ${(activeStepIdx + 1).toString()} of ${STEPS.length.toString()}`}
-            </p>
-          </div>
-        </div>
-      </PageLayout.TopNav>
-
-      <PageLayout.ScrollableBody>
-        {isProcessing ? (
+                </SidebarGroupContent>
+              </SidebarGroup>
+            </SidebarContent>
+          </Sidebar>
+        </aside>
+        <main className="flex-1 overflow-hidden">
+          <div className="h-full overflow-y-auto">
+            {isProcessing ? (
           <div className="flex flex-col items-center justify-center gap-8 py-24 text-center">
             {processingFailed ? (
               <>
@@ -448,10 +442,12 @@ export default function InitializePage() {
               </>
             )}
           </div>
-        ) : (
-          activeStep.component
-        )}
-      </PageLayout.ScrollableBody>
-    </PageLayout>
+            ) : (
+              activeStep.component
+            )}
+          </div>
+        </main>
+      </div>
+    </div>
   )
 }
