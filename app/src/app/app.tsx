@@ -1,29 +1,28 @@
 import { useEffect } from "react"
 import { Outlet, Route, Routes, useNavigate } from "react-router-dom"
 
+import { activeMapStorageKey } from "@/lib/active-map-storage"
+
 import { AppProviders } from "./providers"
 import { AuthProvider } from "./providers/me-provider"
-import { useMaps } from "./providers/me-provider/context"
+import { useMaps, useMe } from "./providers/me-provider/context"
 import { AppLoadingScreen } from "./providers/me-provider/loading-screen"
 import { AppRoutes, PageName } from "./routes"
 
-const ACTIVE_MAP_KEY = "terramaps_active_map_id"
-
 function RootRedirect() {
+  const me = useMe()
   const maps = useMaps()
   const navigate = useNavigate()
 
   useEffect(() => {
-    const stored = localStorage.getItem(ACTIVE_MAP_KEY)
-    const target =
-      (maps.find((m) => m.id === stored) ?? maps.length) ? maps[0] : undefined
+    const stored = localStorage.getItem(activeMapStorageKey(me.id))
+    const target = maps.find((m) => m.id === stored) ?? maps[0]
     if (target) {
-      localStorage.setItem(ACTIVE_MAP_KEY, target.id)
       void navigate(AppRoutes.getRoute(PageName.Home, { mapId: target.id }), {
         replace: true,
       })
     }
-  }, [maps, navigate])
+  }, [maps, me.id, navigate])
 
   return <AppLoadingScreen />
 }
