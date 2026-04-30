@@ -12,6 +12,7 @@ COPY app/package.json app/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY app/vite.config.ts app/index.html app/tsconfig.*json app/eslint.config.js ./
 
+COPY app/public ./public
 COPY app/src ./src
 
 RUN pnpm run build
