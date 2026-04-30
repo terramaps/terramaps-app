@@ -10,6 +10,7 @@ from sqlalchemy.orm import undefer
 
 from src.app.database import DatabaseSession
 from src.exceptions import TerramapsException
+from src.models.cache import MvtTileCacheModel
 from src.models.geography import ZipCodeGeography
 from src.models.graph import LayerModel, MapModel, NodeModel, ZipAssignmentModel
 from src.models.jobs import MapJobModel
@@ -795,6 +796,8 @@ def bulk_assign_zips(
     if data.parent_node_id is not None:
         affected_ids.add(data.parent_node_id)
 
+    db.execute(delete(MvtTileCacheModel).where(MvtTileCacheModel.layer_id == layer_id))
+
     if affected_ids:
         job_id = _enqueue_recompute(db, layer.map_id)
         db.commit()
@@ -841,6 +844,7 @@ def assign_zip(
 
     if affected_ids:
         computation.recompute_from(affected_ids)
+    db.execute(delete(MvtTileCacheModel).where(MvtTileCacheModel.layer_id == layer_id))
     _bump_tile_version(db, layer.map_id)
     db.commit()
 
@@ -879,6 +883,7 @@ def reset_zip(
 
     if old_parent_id is not None:
         computation.recompute_from({old_parent_id})
+    db.execute(delete(MvtTileCacheModel).where(MvtTileCacheModel.layer_id == layer_id))
     _bump_tile_version(db, layer.map_id)
     db.commit()
 

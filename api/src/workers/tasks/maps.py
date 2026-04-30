@@ -347,9 +347,12 @@ def import_map_task(self: DatabaseTask, map_id: str) -> None:  # type: ignore[mi
 
         _set_import_step(self, upload, "Computing geometry")
         computation = ComputationService(db=self.db)
-        layers = computation.recompute_all_layers(map_id)
-        if layers:
-            computation.invalidate_cache_for_layers({layer.id for layer in layers})
+        computation.recompute_all_layers(map_id)
+        all_layer_ids = set(
+            self.db.execute(select(LayerModel.id).where(LayerModel.map_id == map_id)).scalars().all()
+        )
+        if all_layer_ids:
+            computation.invalidate_cache_for_layers(all_layer_ids)
             map_model.tile_version += 1
             self.db.flush()
 
