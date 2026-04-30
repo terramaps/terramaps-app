@@ -1184,12 +1184,20 @@ export interface components {
          *     All node_ids must belong to the same layer (order >= 1).
          *     Children (child nodes or zip assignments) are reparented to the new node.
          *     parent_node_id must be in the layer directly above, or null.
+         *
+         *     Exactly one of name or target_node_id must be provided:
+         *     - name: create a brand-new node with this name as the merge destination.
+         *     - target_node_id: use an existing node (must be in node_ids) as the
+         *       destination; all other nodes' children are moved into it, then the
+         *       others are deleted.
          */
         MergeNodes: {
             /** Node Ids */
             node_ids: number[];
             /** Name */
-            name: string;
+            name?: string | null;
+            /** Target Node Id */
+            target_node_id?: number | null;
             /** Parent Node Id */
             parent_node_id: number | null;
         };

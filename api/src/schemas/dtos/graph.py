@@ -61,11 +61,29 @@ class MergeNodes(BaseModel):
     All node_ids must belong to the same layer (order >= 1).
     Children (child nodes or zip assignments) are reparented to the new node.
     parent_node_id must be in the layer directly above, or null.
+
+    Exactly one of name or target_node_id must be provided:
+    - name: create a brand-new node with this name as the merge destination.
+    - target_node_id: use an existing node (must be in node_ids) as the
+      destination; all other nodes' children are moved into it, then the
+      others are deleted.
     """
 
     node_ids: list[int]
-    name: str
+    name: str | None = None
+    target_node_id: int | None = None
     parent_node_id: int | None
+
+    @model_validator(mode="after")
+    def validate_name_xor_target(self) -> "MergeNodes":
+        """Ensure exactly one of name/target_node_id is set and target is in node_ids."""
+        has_name = self.name is not None
+        has_target = self.target_node_id is not None
+        if has_name == has_target:
+            raise ValueError("Provide exactly one of 'name' or 'target_node_id'.")
+        if has_target and self.target_node_id not in self.node_ids:
+            raise ValueError("'target_node_id' must be one of 'node_ids'.")
+        return self
 
 
 class BulkDeleteNodes(BaseModel):

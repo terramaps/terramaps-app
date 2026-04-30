@@ -1,9 +1,10 @@
 """Graph router."""
 
+import uuid
 from collections.abc import Sequence
 
 from fastapi import APIRouter, HTTPException
-from geoalchemy2.functions import ST_Centroid, ST_Envelope, ST_X, ST_XMax, ST_XMin, ST_Y, ST_YMax, ST_YMin
+from geoalchemy2.functions import ST_X, ST_Y, ST_Centroid, ST_Envelope, ST_XMax, ST_XMin, ST_YMax, ST_YMin
 from sqlalchemy import and_, delete, func, select
 from sqlalchemy.orm import undefer
 
@@ -11,6 +12,7 @@ from src.app.database import DatabaseSession
 from src.exceptions import TerramapsException
 from src.models.geography import ZipCodeGeography
 from src.models.graph import LayerModel, MapModel, NodeModel, ZipAssignmentModel
+from src.models.jobs import MapJobModel
 from src.schemas.dtos.graph import (
     AssignZip,
     BulkAssignZips,
@@ -38,6 +40,7 @@ from src.services.auth import CurrentUserDependency
 from src.services.computation import ComputationServiceDependency
 from src.services.graph import GraphServiceDependency
 from src.services.permissions import PermissionsServiceDependency
+from src.workers.tasks.maps import recompute_nodes_task
 
 graph_router = APIRouter(prefix="", tags=["Graph"])
 
@@ -47,6 +50,24 @@ def _bump_tile_version(db: DatabaseSession, map_id: str) -> None:
     map_model = db.get(MapModel, map_id)
     if map_model:
         map_model.tile_version += 1
+
+
+def _enqueue_recompute(db: DatabaseSession, map_id: str) -> str:
+    """Stage a pending MapJobModel recompute record and return its ID.
+
+    Caller must commit before dispatching the Celery task so the worker
+    sees the committed job row.
+    """
+    job_id = str(uuid.uuid4())
+    db.add(
+        MapJobModel(
+            id=job_id,
+            map_id=map_id,
+            job_type="recompute_geometry",
+            status="pending",
+        )
+    )
+    return job_id
 
 
 # ---------------------------------------------------------------------------
@@ -191,9 +212,7 @@ def query_nodes(
         raise HTTPException(400, "Provide at least one of: layer_id, parent_node_id, ids")
 
     map_id = _resolve_node_query_map_id(db, body)
-    if not permission_service.check_for_map_access(
-        user_id=current_user.id, map_id=map_id, map_roles=["OWNER"]
-    ):
+    if not permission_service.check_for_map_access(user_id=current_user.id, map_id=map_id, map_roles=["OWNER"]):
         raise HTTPException(403)
 
     conditions = []
@@ -210,16 +229,22 @@ def query_nodes(
     total_pages = (total + page_size - 1) // page_size if total > 0 else 0
     offset = (page - 1) * page_size
     nodes = (
-        db.execute(
-            select(NodeModel).where(*conditions).order_by(NodeModel.name).offset(offset).limit(page_size)
-        )
+        db
+        .execute(select(NodeModel).where(*conditions).order_by(NodeModel.name).offset(offset).limit(page_size))
         .scalars()
         .all()
     )
 
     return PaginatedNodes(
         nodes=[
-            Node(id=n.id, layer_id=n.layer_id, color=n.color, name=n.name, parent_node_id=n.parent_node_id, child_count=n.child_count)
+            Node(
+                id=n.id,
+                layer_id=n.layer_id,
+                color=n.color,
+                name=n.name,
+                parent_node_id=n.parent_node_id,
+                child_count=n.child_count,
+            )
             for n in nodes
         ],
         total=total,
@@ -238,7 +263,8 @@ def get_node(
 ):
     """Get node by id, including computed data and full ancestor chain."""
     result = (
-        db.execute(
+        db
+        .execute(
             select(NodeModel, LayerModel)
             .join(LayerModel, NodeModel.layer_id == LayerModel.id)
             .filter(NodeModel.id == node_id)
@@ -261,7 +287,8 @@ def get_node(
     current_parent_id = node.parent_node_id
     while current_parent_id is not None:
         parent_result = (
-            db.execute(
+            db
+            .execute(
                 select(NodeModel, LayerModel)
                 .join(LayerModel, NodeModel.layer_id == LayerModel.id)
                 .filter(NodeModel.id == current_parent_id)
@@ -307,7 +334,8 @@ def update_node(
 ):
     """Update node."""
     result = (
-        db.execute(
+        db
+        .execute(
             select(NodeModel, LayerModel)
             .join(LayerModel, NodeModel.layer_id == LayerModel.id)
             .filter(NodeModel.id == node_id)
@@ -362,7 +390,8 @@ def delete_node(
 ):
     """Delete a node (order>=1 only). Cascades to child nodes via FK."""
     result = (
-        db.execute(
+        db
+        .execute(
             select(NodeModel, LayerModel)
             .join(LayerModel, NodeModel.layer_id == LayerModel.id)
             .filter(NodeModel.id == node_id)
@@ -401,7 +430,8 @@ def bulk_update_node(
 ):
     """Bulk update nodes (name/color only — does not change parent assignment)."""
     nodes_and_layers = (
-        db.execute(
+        db
+        .execute(
             select(NodeModel, LayerModel)
             .join(target=LayerModel, onclause=NodeModel.layer_id == LayerModel.id)
             .filter(NodeModel.id.in_([n.id for n in node_datas]))
@@ -443,7 +473,6 @@ def bulk_reparent_nodes(
     graph_service: GraphServiceDependency,
     current_user: CurrentUserDependency,
     permission_service: PermissionsServiceDependency,
-    computation: ComputationServiceDependency,
 ):
     """Bulk reparent nodes to a new parent (or orphan them).
 
@@ -451,7 +480,8 @@ def bulk_reparent_nodes(
     directly above, or null to remove the parent assignment.
     """
     nodes_and_layers = (
-        db.execute(
+        db
+        .execute(
             select(NodeModel, LayerModel)
             .join(LayerModel, NodeModel.layer_id == LayerModel.id)
             .where(NodeModel.id.in_(data.node_ids))
@@ -468,9 +498,7 @@ def bulk_reparent_nodes(
     map_id = next(iter(map_ids))
 
     # Collect old parent IDs before the mutation so we know what to recompute.
-    old_parent_ids: set[int] = {
-        n.parent_node_id for n, _ in nodes_and_layers if n.parent_node_id is not None
-    }
+    old_parent_ids: set[int] = {n.parent_node_id for n, _ in nodes_and_layers if n.parent_node_id is not None}
 
     try:
         updated = graph_service.reparent_nodes(data)
@@ -482,9 +510,11 @@ def bulk_reparent_nodes(
         affected_ids.add(data.parent_node_id)
 
     if affected_ids:
-        computation.recompute_from(affected_ids)
-    _bump_tile_version(db, map_id)
-    db.commit()
+        job_id = _enqueue_recompute(db, map_id)
+        db.commit()
+        recompute_nodes_task.delay(job_id, map_id, list(affected_ids))
+    else:
+        db.commit()
 
     return [
         Node(
@@ -506,7 +536,6 @@ def merge_nodes(
     graph_service: GraphServiceDependency,
     current_user: CurrentUserDependency,
     permission_service: PermissionsServiceDependency,
-    computation: ComputationServiceDependency,
 ):
     """Merge multiple nodes into a new node in the same layer.
 
@@ -514,7 +543,8 @@ def merge_nodes(
     to the new node, and deletes the originals. Only valid for order>=1 layers.
     """
     nodes_and_layers = (
-        db.execute(
+        db
+        .execute(
             select(NodeModel, LayerModel)
             .join(LayerModel, NodeModel.layer_id == LayerModel.id)
             .where(NodeModel.id.in_(data.node_ids))
@@ -529,15 +559,22 @@ def merge_nodes(
             raise HTTPException(403)
 
     map_id = next(iter(map_ids))
+
+    # Capture old parent IDs before the merge so we recompute regions that lose children.
+    old_parent_ids: set[int] = {n.parent_node_id for n, _ in nodes_and_layers if n.parent_node_id is not None}
+
     try:
         new_node = graph_service.merge_nodes(data)
     except TerramapsException as e:
         raise HTTPException(e.code if e.code in (400, 404) else 400, e.msg) from e
 
-    # new_node has inherited all children — recompute it and propagate up.
-    computation.recompute_from({new_node.id})
-    _bump_tile_version(db, map_id)
+    # new_node needs its own geometry computed; old parents may have lost children to a
+    # different region and must be recomputed to shed the stale geometry.
+    affected_ids = {new_node.id} | old_parent_ids
+
+    job_id = _enqueue_recompute(db, map_id)
     db.commit()
+    recompute_nodes_task.delay(job_id, map_id, list(affected_ids))
 
     return Node(
         id=new_node.id,
@@ -556,7 +593,6 @@ def bulk_delete_nodes(
     graph_service: GraphServiceDependency,
     current_user: CurrentUserDependency,
     permission_service: PermissionsServiceDependency,
-    computation: ComputationServiceDependency,
 ):
     """Bulk delete nodes, orphaning or reparenting their children first.
 
@@ -565,7 +601,8 @@ def bulk_delete_nodes(
     Only valid for order>=1 layers.
     """
     nodes_and_layers = (
-        db.execute(
+        db
+        .execute(
             select(NodeModel, LayerModel)
             .join(LayerModel, NodeModel.layer_id == LayerModel.id)
             .where(NodeModel.id.in_(data.node_ids))
@@ -582,9 +619,7 @@ def bulk_delete_nodes(
     map_id = next(iter(map_ids))
 
     # Capture what will change before deletion.
-    deleted_parent_ids: set[int] = {
-        n.parent_node_id for n, _ in nodes_and_layers if n.parent_node_id is not None
-    }
+    deleted_parent_ids: set[int] = {n.parent_node_id for n, _ in nodes_and_layers if n.parent_node_id is not None}
 
     try:
         graph_service.bulk_delete_nodes(data)
@@ -597,9 +632,11 @@ def bulk_delete_nodes(
         affected_ids.add(data.reparent_node_id)
 
     if affected_ids:
-        computation.recompute_from(affected_ids)
-    _bump_tile_version(db, map_id)
-    db.commit()
+        job_id = _enqueue_recompute(db, map_id)
+        db.commit()
+        recompute_nodes_task.delay(job_id, map_id, list(affected_ids))
+    else:
+        db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -707,7 +744,9 @@ def query_zip_assignments(
 
     return PaginatedZipAssignments(
         zip_assignments=[
-            ZipAssignment(zip_code=row.zip_code, layer_id=body.layer_id, parent_node_id=row.parent_node_id, color=row.color)
+            ZipAssignment(
+                zip_code=row.zip_code, layer_id=body.layer_id, parent_node_id=row.parent_node_id, color=row.color
+            )
             for row in rows
         ],
         total=total,
@@ -725,7 +764,6 @@ def bulk_assign_zips(
     graph_service: GraphServiceDependency,
     current_user: CurrentUserDependency,
     permission_service: PermissionsServiceDependency,
-    computation: ComputationServiceDependency,
 ):
     """Bulk assign or unassign zip codes to a territory.
 
@@ -736,14 +774,16 @@ def bulk_assign_zips(
 
     # Capture old parent IDs before the upsert so territories losing zips are included.
     old_parent_ids: set[int] = set(
-        db.execute(
-            select(ZipAssignmentModel.parent_node_id)
-            .where(
+        db
+        .execute(
+            select(ZipAssignmentModel.parent_node_id).where(
                 ZipAssignmentModel.layer_id == layer_id,
                 ZipAssignmentModel.zip_code.in_(data.zip_codes),
                 ZipAssignmentModel.parent_node_id.isnot(None),
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
 
     try:
@@ -756,9 +796,11 @@ def bulk_assign_zips(
         affected_ids.add(data.parent_node_id)
 
     if affected_ids:
-        computation.recompute_from(affected_ids)
-    _bump_tile_version(db, layer.map_id)
-    db.commit()
+        job_id = _enqueue_recompute(db, layer.map_id)
+        db.commit()
+        recompute_nodes_task.delay(job_id, layer.map_id, list(affected_ids))
+    else:
+        db.commit()
     return {"updated": count}
 
 
@@ -781,8 +823,9 @@ def assign_zip(
     padded = zip_code.zfill(5)
 
     old_parent_id: int | None = db.execute(
-        select(ZipAssignmentModel.parent_node_id)
-        .where(ZipAssignmentModel.layer_id == layer_id, ZipAssignmentModel.zip_code == padded)
+        select(ZipAssignmentModel.parent_node_id).where(
+            ZipAssignmentModel.layer_id == layer_id, ZipAssignmentModel.zip_code == padded
+        )
     ).scalar_one_or_none()
 
     try:
@@ -827,8 +870,9 @@ def reset_zip(
     padded = zip_code.zfill(5)
 
     old_parent_id: int | None = db.execute(
-        select(ZipAssignmentModel.parent_node_id)
-        .where(ZipAssignmentModel.layer_id == layer_id, ZipAssignmentModel.zip_code == padded)
+        select(ZipAssignmentModel.parent_node_id).where(
+            ZipAssignmentModel.layer_id == layer_id, ZipAssignmentModel.zip_code == padded
+        )
     ).scalar_one_or_none()
 
     graph_service.reset_zip(layer_id=layer_id, zip_code=padded)

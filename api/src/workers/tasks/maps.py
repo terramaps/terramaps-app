@@ -15,6 +15,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from src.models.geography import ZipCodeGeography
 from src.models.graph import LayerModel, MapModel, NodeModel, ZipAssignmentModel
+from src.models.jobs import MapJobModel
 from src.models.uploads import MapUploadModel
 from src.services import mvt as mvt_service
 from src.services import mvt_cache
@@ -230,6 +231,43 @@ def _insert_node_layer(
     ]
     result = task.db.execute(insert(NodeModel).values(node_rows).returning(NodeModel.id, NodeModel.name)).tuples()
     return pd.DataFrame(result, columns=["id", "name"]).astype(object)
+
+
+@celery_app.task(base=DatabaseTask, bind=True, queue="terramaps", name="src.workers.tasks.maps.recompute_nodes_task")
+def recompute_nodes_task(self: DatabaseTask, job_id: str, map_id: str, affected_node_ids: list[int]) -> None:  # type: ignore[misc]
+    """Recompute geometry and data for affected nodes and their ancestors."""
+    job = self.db.get(MapJobModel, job_id)
+    if not job:
+        logger.error("recompute_nodes_task: job %s not found", job_id)
+        return
+
+    try:
+        job.status = "processing"
+        job.step = "Recomputing..."
+        self.db.commit()
+
+        affected = set(affected_node_ids)
+        computation = ComputationService(db=self.db)
+        computation.recompute_from(affected)
+        computation.compute_data_from(affected, map_id)
+
+        map_model = self.db.get(MapModel, map_id)
+        if map_model:
+            map_model.tile_version += 1
+
+        job.status = "complete"
+        job.step = None
+        self.db.commit()
+        logger.info("recompute_nodes_task [%s]: complete", job_id)
+
+    except Exception as exc:
+        logger.exception("recompute_nodes_task [%s]: failed", job_id)
+        self.db.rollback()
+        job.status = "failed"
+        job.step = None
+        job.error = str(exc)
+        self.db.commit()
+        raise
 
 
 @celery_app.task(base=DatabaseTask, bind=True, queue="terramaps", name="src.workers.tasks.maps.import_map_task")

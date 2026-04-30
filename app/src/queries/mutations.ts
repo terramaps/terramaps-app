@@ -219,15 +219,17 @@ export const useCreateNodeMutation = () => {
 
 export const useMergeNodesMutation = () => {
   return useMutation({
-    mutationFn: async (vars: {
-      nodeIds: number[]
-      name: string
-      parentNodeId: number | null
-    }) => {
+    mutationFn: async (
+      vars: { nodeIds: number[]; parentNodeId: number | null } & (
+        | { name: string; targetNodeId?: never }
+        | { targetNodeId: number; name?: never }
+      ),
+    ) => {
       const response = await fetchClient.POST("/nodes/merge", {
         body: {
           node_ids: vars.nodeIds,
-          name: vars.name,
+          name: vars.name ?? null,
+          target_node_id: vars.targetNodeId ?? null,
           parent_node_id: vars.parentNodeId,
         },
       })

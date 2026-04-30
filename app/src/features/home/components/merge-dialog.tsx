@@ -57,6 +57,7 @@ export function MergeDialog({
   onSuccess,
 }: MergeDialogProps) {
   const [name, setName] = useState("")
+  const [targetNodeId, setTargetNodeId] = useState<number | null>(null)
   const [targetParentId, setTargetParentId] = useState<number | null>(null)
   const [initialised, setInitialised] = useState(false)
 
@@ -90,11 +91,9 @@ export function MergeDialog({
   const handleConfirm = () => {
     if (!name.trim()) return
     mergeNodesMutation.mutate(
-      {
-        nodeIds: selectedNodeIds,
-        name: name.trim(),
-        parentNodeId: targetParentId,
-      },
+      targetNodeId !== null
+        ? { nodeIds: selectedNodeIds, targetNodeId, parentNodeId: targetParentId }
+        : { nodeIds: selectedNodeIds, name: name.trim(), parentNodeId: targetParentId },
       {
         onSuccess: () => {
           onOpenChange(false)
@@ -107,6 +106,7 @@ export function MergeDialog({
   const handleOpenChange = (next: boolean) => {
     if (!isPending) {
       setName("")
+      setTargetNodeId(null)
       setTargetParentId(null)
       setInitialised(false)
       onOpenChange(next)
@@ -150,17 +150,23 @@ export function MergeDialog({
               value={name}
               onChange={(e) => {
                 setName(e.target.value)
+                setTargetNodeId(null)
               }}
             />
             {selectedNodeData.length > 0 && (
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground text-xs">
-                  Or use existing:
+                  Or keep existing:
                 </span>
                 <Select
-                  value=""
+                  value={targetNodeId !== null ? String(targetNodeId) : ""}
                   onValueChange={(val) => {
-                    setName(val)
+                    const node = selectedNodeData.find(
+                      (n) => n.id === Number(val),
+                    )
+                    if (!node) return
+                    setName(node.name)
+                    setTargetNodeId(node.id)
                   }}
                 >
                   <SelectTrigger className="h-7 text-xs">
@@ -168,7 +174,7 @@ export function MergeDialog({
                   </SelectTrigger>
                   <SelectContent>
                     {selectedNodeData.map((n) => (
-                      <SelectItem key={n.id} value={n.name}>
+                      <SelectItem key={n.id} value={String(n.id)}>
                         {n.name}
                       </SelectItem>
                     ))}

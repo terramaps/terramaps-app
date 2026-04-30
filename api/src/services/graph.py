@@ -193,14 +193,38 @@ class GraphService(BaseService):
         if data.parent_node_id is not None:
             self._propose_node_parent(layer, data.parent_node_id)
 
+        if data.target_node_id is not None:
+            # Keep the target node; reparent everything from the other nodes into it.
+            dest_node = cast(NodeModel, self.db.get(NodeModel, data.target_node_id))
+            dest_node.parent_node_id = data.parent_node_id
+            other_ids = [nid for nid in data.node_ids if nid != data.target_node_id]
+            if layer.order == 1:
+                self.db.execute(
+                    update(ZipAssignmentModel)
+                    .where(ZipAssignmentModel.parent_node_id.in_(other_ids))
+                    .values(parent_node_id=dest_node.id)
+                )
+            else:
+                self.db.execute(
+                    update(NodeModel)
+                    .where(NodeModel.parent_node_id.in_(other_ids))
+                    .values(parent_node_id=dest_node.id)
+                )
+            self.db.execute(delete(NodeModel).where(NodeModel.id.in_(other_ids)))
+            self.db.flush()
+            return dest_node
+
         new_node = NodeModel(
             name=data.name,
             layer_id=layer.id,
             color="#CCCCCC",
             parent_node_id=data.parent_node_id,
             geom_z3=None,
+            geom_z3_merc=None,
             geom_z7=None,
+            geom_z7_merc=None,
             geom_z11=None,
+            geom_z11_merc=None,
             data=None,
         )
         self.db.add(new_node)

@@ -76,6 +76,32 @@ class ComputationService(BaseService):
     # Data aggregation
     # ------------------------------------------------------------------
 
+    def compute_data_from(self, affected_node_ids: set[int], map_id: str) -> None:
+        """Recompute data aggregations for the given nodes and all their ancestors.
+
+        Mirrors recompute_from but for data instead of geometry — only touches
+        the affected set and propagates upward, not the entire map.
+        """
+        map_model = self.db.get(MapModel, map_id)
+        if not map_model or not map_model.data_field_config:
+            return
+        number_fields = [
+            f for f in map_model.data_field_config
+            if f.get("type") == "number" and f.get("aggregations")
+        ]
+        if not number_fields:
+            return
+
+        current_ids = set(affected_node_ids)
+        while current_ids:
+            order_groups = self._get_layer_order_groups(current_ids)
+            for order, (_layer_id, ids) in sorted(order_groups.items()):
+                if order == 1:
+                    self._compute_data_zip_layer(ids, number_fields)
+                else:
+                    self._compute_data_node_layer(ids, number_fields)
+            current_ids = self._get_parent_ids(current_ids)
+
     def compute_data_for_map(self, map_id: str) -> None:
         """Aggregate numeric data fields bottom-to-top for all layers in a map.
 
