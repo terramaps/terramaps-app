@@ -73,6 +73,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { activeMapStorageKey } from "@/lib/active-map-storage"
 import { DeleteDialog } from "@/features/home/components/delete-dialog"
 import { ExportPptDialog } from "@/features/home/components/export-ppt-dialog"
 import { ExportZttDialog } from "@/features/home/components/export-ztt-dialog"
@@ -104,8 +105,6 @@ import {
   updateSelectedNodeStates,
   updateSelectedZipStates,
 } from "./components/map/utils"
-
-const ACTIVE_MAP_KEY = "terramaps_active_map_id"
 
 const BASE_MAPS = [
   { id: "osm", name: "OpenStreetMap" },
@@ -390,7 +389,6 @@ function HomePageContent() {
                       key={map.id}
                       className="gap-3"
                       onClick={() => {
-                        localStorage.setItem(ACTIVE_MAP_KEY, map.id)
                         void navigate(
                           AppRoutes.getRoute(PageName.Home, { mapId: map.id }),
                         )
@@ -1194,9 +1192,14 @@ function HomePageContent() {
 }
 
 export default function HomePage() {
+  const me = useMe()
   const maps = useMaps()
   const { mapId } = useParams<{ mapId: string }>()
   const currentMap = maps.find((m) => m.id === mapId) ?? maps[0]
+
+  useEffect(() => {
+    localStorage.setItem(activeMapStorageKey(me.id), currentMap.id)
+  }, [me.id, currentMap.id])
 
   return (
     <ActiveMapProvider key={currentMap.id} mapId={currentMap.id}>
