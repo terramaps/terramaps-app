@@ -292,6 +292,7 @@ export const Map = forwardRef<
           style={{ width: "100%", height: "100%" }}
           attributionControl={false}
           maxParallelImageRequests={6}
+          canvasContextAttributes={{ preserveDrawingBuffer: true }}
         />
       </div>
     )
